@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+/dist
+/server/node_modules
+/client/node_modules
+.env
+.env.*
+.server.env
+server/.env
+server/.env.*
+client/.env
+client/.env.*
+client/dist/
+server/server_start.log
+server/uploads/
+server/package-lock.json
+client/dist/

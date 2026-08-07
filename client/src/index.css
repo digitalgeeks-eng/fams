@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family: 'Poppins', 'Inter', 'Segoe UI', sans-serif;
+  --color-background: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #F1F5F9;
+  --color-border: #E2E8F0;
+  --color-divider: #CBD5E1;
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-light: #DBEAFE;
+  --color-accent: #10B981;
+  --color-accent-hover: #059669;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748B;
+  --color-text-placeholder: #94A3B8;
+  --color-disabled: #CBD5E1;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-info: #0EA5E9;
+  --color-pending: #8B5CF6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--color-text-primary);
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.shadow-card {
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+}
+
+/* Enhanced Card Styling */
+@layer components {
+  .property-card {
+    @apply overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-card transition duration-300 hover:-translate-y-2 hover:shadow-2xl;
+  }
+
+  .property-image {
+    @apply h-full w-full object-cover transition duration-500 group-hover:scale-110;
+  }
+
+  .property-badge {
+    @apply inline-flex items-center rounded-full px-4 py-2.5 text-sm font-bold shadow-md backdrop-blur-sm transition duration-300;
+  }
+
+  .property-type-badge {
+    @apply rounded-full bg-gradient-to-r from-primary/10 to-accent/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary whitespace-nowrap;
+  }
+
+  .stat-badge {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-700 border transition duration-300;
+  }
+
+  .stat-badge-rating {
+    @apply bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-100/50 hover:shadow-md;
+  }
+
+  .stat-badge-type {
+    @apply bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100/50 hover:shadow-md;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition duration-300 hover:shadow-lg hover:from-blue-600 hover:to-blue-700 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-primary hover:text-primary hover:shadow-md;
+  }
+}

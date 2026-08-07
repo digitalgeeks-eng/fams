@@ -1,0 +1,17 @@
+{
+  "name": "fulafia-ams",
+  "version": "1.0.0",
+  "description": "FULAFIA Accommodation Management System",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspace=fulafia-ams-client",
+    "start": "npm start --workspace=server",
+    "client": "npm --workspace=client",
+    "server": "npm --workspace=server"
+  }
+}
