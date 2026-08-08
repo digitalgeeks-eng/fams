@@ -1,16 +1,25 @@
+```javascript
 import axios from 'axios';
 
-const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const normalizedApiUrl = rawApiUrl.replace(/\/+$/, '');
+const apiBaseUrl = normalizedApiUrl.endsWith('/api')
+  ? normalizedApiUrl
+  : `${normalizedApiUrl}/api`;
+
+const backendBaseUrl =
+  import.meta.env.VITE_BACKEND_URL || apiBaseUrl.replace(/\/api\/?$/, '') || 'http://localhost:5000';
 
 const api = axios.create({
   baseURL: apiBaseUrl,
-  withCredentials: true
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('amsToken');
+
   config.headers = config.headers || {};
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -20,6 +29,7 @@ api.interceptors.request.use((config) => {
       delete config.headers['Content-Type'];
     }
   }
+
   return config;
 });
 
@@ -34,3 +44,4 @@ export const setAuthToken = (token) => {
 };
 
 export default api;
+```
