@@ -1,14 +1,10 @@
-```javascript
 import axios from 'axios';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const normalizedApiUrl = rawApiUrl.replace(/\/+$/, '');
-const apiBaseUrl = normalizedApiUrl.endsWith('/api')
-  ? normalizedApiUrl
-  : `${normalizedApiUrl}/api`;
+const apiBaseUrl =
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const backendBaseUrl =
-  import.meta.env.VITE_BACKEND_URL || apiBaseUrl.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+  import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const api = axios.create({
   baseURL: apiBaseUrl,
@@ -44,4 +40,3 @@ export const setAuthToken = (token) => {
 };
 
 export default api;
-```
