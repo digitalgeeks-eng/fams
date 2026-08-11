@@ -94,7 +94,8 @@ const PropertyDetails = () => {
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="rounded-3xl bg-red-100 p-8 text-red-700">{error}</div>;
 
-  const canBook = property?.approvalStatus === 'approved';
+  const isUnavailable = property?.isUnavailable;
+  const canBook = property?.approvalStatus === 'approved' && !isUnavailable;
   const currentImageUrl = getImageUrl(property?.images?.[activeIndex]);
   const hasMultipleImages = property?.images?.length > 1;
 
@@ -184,7 +185,7 @@ const PropertyDetails = () => {
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Location: {property.location}</span>
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Type: {property.type}</span>
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Price: ₦{property.price.toLocaleString()}</span>
-          <span className="rounded-3xl border border-slate-200 px-4 py-3">Status: {property.approvalStatus}</span>
+          <span className="rounded-3xl border border-slate-200 px-4 py-3">Status: {isUnavailable ? 'Not Available' : property.approvalStatus}</span>
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Average rating: {property.averageRating?.toFixed(1) || 'N/A'}</span>
@@ -196,11 +197,15 @@ const PropertyDetails = () => {
       <div className="bg-white rounded-3xl shadow-xl p-6">
         <h2 className="text-xl font-semibold">Booking details</h2>
         <p className="mt-3 text-slate-600">Click the button below to book this property instantly.</p>
-        {property.approvalStatus !== 'approved' && (
+        {isUnavailable ? (
+          <div className="mt-4 rounded-3xl bg-rose-50 border border-rose-200 p-4 text-rose-700">
+            House Not Available. This property is already booked or no longer available.
+          </div>
+        ) : property.approvalStatus !== 'approved' ? (
           <div className="mt-4 rounded-3xl bg-amber-50 border border-amber-200 p-4 text-amber-800">
             This property is currently {property.approvalStatus}. Booking is available after approval.
           </div>
-        )}
+        ) : null}
         {error && <div className="mt-4 rounded-3xl bg-rose-50 border border-rose-200 p-4 text-rose-700">{error}</div>}
         
         {/* Countdown Timer */}
@@ -228,7 +233,7 @@ const PropertyDetails = () => {
           disabled={!canBook}
           className={`mt-6 w-full px-4 py-3 rounded-2xl text-white font-semibold transition ${canBook ? 'bg-primary hover:bg-slate-900' : 'bg-slate-300 cursor-not-allowed'}`}
         >
-          {canBook ? 'Book Now' : 'Waiting Approval'}
+          {isUnavailable ? 'House Not Available' : canBook ? 'Book Now' : 'Waiting Approval'}
         </button>
         {user?.role === 'student' && (
           <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">

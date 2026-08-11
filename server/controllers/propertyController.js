@@ -6,7 +6,6 @@ export const listProperties = async (req, res) => {
   const { search, location, type, priceRange, page = 1, limit = 12 } = req.query;
   const filter = {
     approvalStatus: 'approved',
-    isUnavailable: { $ne: true },
     $or: [
       { visibleUntil: { $exists: false } },
       { visibleUntil: null },
@@ -34,7 +33,7 @@ export const listProperties = async (req, res) => {
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).populate('agentId', 'name email');
   if (!property) return res.status(404).json({ message: 'Property not found' });
-  if (req.user?.role === 'student' && (property.isUnavailable || (property.visibleUntil && property.visibleUntil <= new Date()))) {
+  if (req.user?.role === 'student' && (property.visibleUntil && property.visibleUntil <= new Date())) {
     return res.status(404).json({ message: 'Property not found' });
   }
   if (req.user?.role === 'student') {

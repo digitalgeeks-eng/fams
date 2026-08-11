@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
+import Property from '../models/Property.js';
 import User from '../models/User.js';
 import { initializePayment, verifyPayment as verifyPaystackPayment } from '../services/paymentService.js';
 
@@ -45,15 +46,26 @@ const verifyBookingPayment = async (payment) => {
 
   if (!booking) return null;
 
-  booking.paymentStatus = 'paid';
-  booking.bookingStatus = 'confirmed';
-  booking.successfulPayment = true;
-  await booking.save();
+  const propertyId = booking.propertyId?._id || booking.propertyId;
+  if (!propertyId) {
+    throw new Error('Booking property not found');
+  }
 
-  const property = booking.propertyId;
-  if (property) {
-    property.isUnavailable = true;
-    await property.save();
+  const updatedProperty = await Property.findOneAndUpdate(
+    { _id: propertyId, isUnavailable: { $ne: true } },
+    { $set: { isUnavailable: true } },
+    { new: true }
+  );
+
+  if (!updatedProperty) {
+    throw new Error('Property is already unavailable');
+  }
+
+  if (booking.paymentStatus !== 'paid' || !booking.successfulPayment) {
+    booking.paymentStatus = 'paid';
+    booking.bookingStatus = 'confirmed';
+    booking.successfulPayment = true;
+    await booking.save();
   }
 
   const agent = booking.propertyId?.agentId;
@@ -83,9 +95,9 @@ export const verifyPaymentController = async (req, res, next) => {
     }
 
     if (reference.startsWith('test-')) {
+      const verifiedBooking = await verifyBookingPayment(payment);
       payment.verificationStatus = 'verified';
       await payment.save();
-      const verifiedBooking = await verifyBookingPayment(payment);
       return res.json({ message: 'Test payment verified successfully', data: { payment, booking: verifiedBooking } });
     }
 
@@ -95,10 +107,15 @@ export const verifyPaymentController = async (req, res, next) => {
       return res.status(400).json({ message: 'Payment verification was not successful' });
     }
 
+    let verifiedBooking;
+    try {
+      verifiedBooking = await verifyBookingPayment(payment);
+    } catch (err) {
+      return res.status(409).json({ message: err.message || 'Unable to confirm payment because the property is unavailable' });
+    }
+
     payment.verificationStatus = 'verified';
     await payment.save();
-
-    const verifiedBooking = await verifyBookingPayment(payment);
     res.json({ message: 'Payment verified successfully', data: { payment, booking: verifiedBooking } });
   } catch (error) {
     next(error);
@@ -148,9 +165,13 @@ export const paymentWebhook = async (req, res, next) => {
       if (payment && payment.verificationStatus !== 'verified') {
         const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable');
         if (booking && booking.paymentStatus !== 'paid' && !booking.successfulPayment && !booking.propertyId?.isUnavailable) {
-          payment.verificationStatus = 'verified';
-          await payment.save();
-          await verifyBookingPayment(payment);
+          try {
+            await verifyBookingPayment(payment);
+            payment.verificationStatus = 'verified';
+            await payment.save();
+          } catch (err) {
+            console.warn('Payment webhook verification skipped:', err.message);
+          }
         }
       }
     }
@@ -266,13 +287,14 @@ export const verifyPaymentAdmin = async (req, res, next) => {
       return res.status(400).json({ message: 'Booking is already paid; no admin verification needed' });
     }
 
-    payment.verificationStatus = status;
-    await payment.save();
-
     if (status === 'verified' && booking) {
-      booking.paymentStatus = 'paid';
-      booking.bookingStatus = 'confirmed';
-      await booking.save();
+      try {
+        await verifyBookingPayment(payment);
+      } catch (err) {
+        return res.status(409).json({ message: err.message || 'Unable to verify payment because the property is unavailable' });
+      }
+      payment.verificationStatus = 'verified';
+      await payment.save();
     }
 
     if (status === 'rejected' && booking) {

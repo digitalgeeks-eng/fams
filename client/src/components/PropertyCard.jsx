@@ -19,8 +19,8 @@ const PropertyCard = ({ property }) => {
         <div className="absolute left-3 top-3 sm:left-5 sm:top-5 inline-flex items-center rounded-full bg-white/95 px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-slate-900 shadow-md backdrop-blur-sm transition duration-300 group-hover:bg-white">
           ₦{property.price?.toLocaleString()}
         </div>
-        <div className="absolute right-3 top-3 sm:right-5 sm:top-5 inline-flex items-center rounded-full bg-slate-900/80 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold text-white shadow-md backdrop-blur-sm transition duration-300 group-hover:bg-slate-900">
-          {property.approvalStatus || 'Pending'}
+        <div className={`absolute right-3 top-3 sm:right-5 sm:top-5 inline-flex items-center rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold shadow-md backdrop-blur-sm transition duration-300 ${property.isUnavailable ? 'bg-rose-600 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-900'}`}>
+          {property.isUnavailable ? 'Not Available' : property.approvalStatus || 'Pending'}
         </div>
       </div>
       <div className="space-y-3 sm:space-y-4 p-4 sm:p-6">
