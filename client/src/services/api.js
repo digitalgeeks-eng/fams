@@ -1,10 +1,15 @@
 import axios from 'axios';
 
-const apiBaseUrl =
-  import.meta.env.VITE_API_URL || 'https://fams-d30v.onrender.com/api';
+const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://fams-d30v.onrender.com/api';
 
-const backendBaseUrl =
-  import.meta.env.VITE_BACKEND_URL || 'https://fams-d30v.onrender.com';
+const backendBaseUrl = (() => {
+  if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:5000';
+  }
+  return 'https://fams-d30v.onrender.com';
+})();
 
 const api = axios.create({
   baseURL: apiBaseUrl,
