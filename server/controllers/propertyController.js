@@ -89,7 +89,7 @@ export const createProperty = async (req, res) => {
     price,
     images,
     videos,
-    availabilityStatus: 'not_available',
+    availabilityStatus: 'available',
     visibleUntil: visibleUntil ? new Date(visibleUntil) : null,
     agentId: req.user._id,
     adminContact: {
