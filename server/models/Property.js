@@ -30,7 +30,7 @@ const propertySchema = new mongoose.Schema({
   approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   isUnavailable: { type: Boolean, default: false },
   availabilityStatus: { type: String, enum: ['available', 'not_available'], default: 'available' },
-  availabilityReason: { type: String, enum: ['payment_verified', 'admin_disabled', 'other'], default: null },
+  availabilityReason: { type: String, enum: ['payment_verified', 'admin_disabled', 'other'] },
   visibleUntil: { type: Date },
   averageRating: { type: Number, default: 0 },
   ratingCount: { type: Number, default: 0 },
