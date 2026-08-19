@@ -1,21 +1,7 @@
-import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadDir = path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const safeName = path.basename(file.originalname).replace(/[^a-z0-9._-]/gi, '-').toLowerCase();
-    cb(null, `${timestamp}-${safeName}`);
-  }
-});
+const imageStorage = multer.memoryStorage();
 
 const imageFilter = (req, file, cb) => {
   const allowedExtensions = /jpeg|jpg|png|gif|webp|bmp|tiff|tif|svg|ico/;
@@ -42,7 +28,7 @@ const videoFilter = (req, file, cb) => {
 
 // Separate multers for specific file types
 export const uploadImages = multer({
-  storage,
+  storage: imageStorage,
   limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter: imageFilter
 });
@@ -60,25 +46,15 @@ const paymentProofFilter = (req, file, cb) => {
 };
 
 export const uploadPaymentProofFile = multer({
-  storage,
+  storage: imageStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: paymentProofFilter
 });
 
 export const uploadVideos = multer({
-  storage,
+  storage: imageStorage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: videoFilter
-});
-
-// Combined multer for handling images and videos in one request
-const combinedStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const safeName = file.originalname.replace(/\s+/g, '-').toLowerCase();
-    cb(null, `${timestamp}-${safeName}`);
-  }
 });
 
 const fileFilter = (req, file, cb) => {
@@ -99,7 +75,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 export const uploadPropertyMedia = multer({
-  storage: combinedStorage,
+  storage: imageStorage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: fileFilter
 });

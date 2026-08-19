@@ -14,8 +14,8 @@ const propertySchema = new mongoose.Schema({
   location: { type: String, required: true, trim: true },
   type: { type: String, enum: ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'], required: true },
   price: { type: Number, required: true },
-  images: [{ type: String }],
-  videos: [{ type: String }],
+  images: [{ type: mongoose.Schema.Types.Mixed }],
+  videos: [{ type: mongoose.Schema.Types.Mixed }],
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   adminContact: {
     name: { type: String, trim: true },

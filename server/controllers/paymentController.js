@@ -6,6 +6,7 @@ import Payment from '../models/Payment.js';
 import Property from '../models/Property.js';
 import User from '../models/User.js';
 import { initializePayment, verifyPayment as verifyPaystackPayment } from '../services/paymentService.js';
+import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
 dotenv.config();
 
@@ -138,12 +139,16 @@ export const uploadPaymentProof = async (req, res, next) => {
     }
 
     const amount = booking.propertyId?.price || 0;
+    const proof = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: 'fulafia-ams/payments/proofs',
+      resourceType: 'auto'
+    });
     const payment = await Payment.create({
       bookingId,
       paymentMethod,
       paymentReference,
       amount,
-      proofImage: `uploads/${req.file.filename}`,
+      proofImage: proof.secure_url,
       verificationStatus: 'pending'
     });
 
@@ -174,6 +179,11 @@ export const submitManualPaymentProof = async (req, res, next) => {
       return res.status(409).json({ message: 'Payment proof is already awaiting verification' });
     }
 
+    const proof = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: 'fulafia-ams/payments/proofs',
+      resourceType: 'auto'
+    });
+    const paymentReference = `MANUAL-${booking._id}-${Date.now()}`;
     const paymentData = {
       bookingId,
       userId: req.user._id,
@@ -181,11 +191,11 @@ export const submitManualPaymentProof = async (req, res, next) => {
       paymentProvider: 'OPay',
       accountName: 'Miracle Obadiah',
       accountNumber: '8106083399',
-      paymentReference: `MANUAL-${booking._id}-${Date.now()}`,
-      transactionReference: `MANUAL-${booking._id}-${Date.now()}`,
+      paymentReference,
+      transactionReference: paymentReference,
       amount: booking.propertyId.price,
-      proofImage: `uploads/${req.file.filename}`,
-      proofPath: `uploads/${req.file.filename}`,
+      proofImage: proof.secure_url,
+      proofPath: proof.secure_url,
       proofFilename: req.file.originalname,
       verificationStatus: 'proof_submitted',
       status: 'proof_submitted',

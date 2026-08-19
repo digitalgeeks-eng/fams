@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import User from '../models/User.js';
 import { validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
+import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
 dotenv.config();
 
@@ -57,8 +58,12 @@ export const register = async (req, res) => {
     userData.yearsOfExperience = parseInt(yearsOfExperience);
     userData.licenseNumber = licenseNumber?.trim();
     userData.bio = bio?.trim();
-    userData.idImage = req.files.idImage[0].path.replace(/\\/g, '/');
-    userData.licenseImage = req.files.licenseImage[0].path.replace(/\\/g, '/');
+    const [idImage, licenseImage] = await Promise.all([
+      uploadBufferToCloudinary(req.files.idImage[0].buffer, { folder: 'fulafia-ams/agents/identity', resourceType: 'image' }),
+      uploadBufferToCloudinary(req.files.licenseImage[0].buffer, { folder: 'fulafia-ams/agents/licenses', resourceType: 'image' })
+    ]);
+    userData.idImage = idImage.secure_url;
+    userData.licenseImage = licenseImage.secure_url;
   }
 
   const user = await User.create(userData);

@@ -1,6 +1,23 @@
 import Property from '../models/Property.js';
 import Booking from '../models/Booking.js';
 import { updateRecommendationData } from '../services/recommendationService.js';
+import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
+
+const uploadPropertyMediaToCloudinary = async (files = []) => Promise.all(files.map(async (file) => {
+  const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
+  const result = await uploadBufferToCloudinary(file.buffer, {
+    folder: resourceType === 'video' ? 'fulafia-ams/properties/videos' : 'fulafia-ams/properties/images',
+    resourceType
+  });
+  return { url: result.secure_url, publicId: result.public_id, resourceType };
+}));
+
+const deleteCloudinaryMedia = async (media = []) => {
+  await Promise.all(media.map((item) => {
+    if (!item || typeof item !== 'object' || !item.publicId) return null;
+    return deleteCloudinaryAsset(item.publicId, item.resourceType || 'image');
+  }));
+};
 
 export const listProperties = async (req, res) => {
   const { search, location, type, priceRange, page = 1, limit = 12 } = req.query;
@@ -59,11 +76,11 @@ export const createProperty = async (req, res) => {
     adminContactTwitter,
     adminContactLinkedin
   } = req.body;
-  const images = req.files?.images?.map((file) => `uploads/${file.filename}`) || [];
-  const videos = req.files?.videos?.map((file) => `uploads/${file.filename}`) || [];
   if (!title || !description || !location || !type || !price) {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
   }
+  const images = await uploadPropertyMediaToCloudinary(req.files?.images);
+  const videos = await uploadPropertyMediaToCloudinary(req.files?.videos);
   const property = await Property.create({
     title,
     description,
@@ -116,14 +133,16 @@ export const updateProperty = async (req, res) => {
   };
   if (req.files) {
     if (req.files.images?.length) {
-      updates.images = req.files.images.map((file) => `uploads/${file.filename}`);
+      updates.images = await uploadPropertyMediaToCloudinary(req.files.images);
     }
     if (req.files.videos?.length) {
-      updates.videos = req.files.videos.map((file) => `uploads/${file.filename}`);
+      updates.videos = await uploadPropertyMediaToCloudinary(req.files.videos);
     }
   }
 
   const updatedProperty = await Property.findByIdAndUpdate(req.params.id, updates, { new: true });
+  if (req.files?.images?.length) await deleteCloudinaryMedia(property.images);
+  if (req.files?.videos?.length) await deleteCloudinaryMedia(property.videos);
   res.json({ message: 'Property updated and sent for approval', data: updatedProperty });
 };
 
@@ -173,6 +192,7 @@ export const deleteProperty = async (req, res) => {
   if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to delete this property' });
   }
+  await deleteCloudinaryMedia([...property.images, ...property.videos]);
   await property.remove();
   res.json({ message: 'Property deleted successfully' });
 };
