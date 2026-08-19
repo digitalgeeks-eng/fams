@@ -8,9 +8,8 @@ const MyBookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeBooking, setActiveBooking] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('offline');
-  const [paymentReference, setPaymentReference] = useState('');
-  const [proofImage, setProofImage] = useState(null);
+  const [proofFile, setProofFile] = useState(null);
+  const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState('');
   const [verifying, setVerifying] = useState(false);
 
@@ -72,43 +71,32 @@ const MyBookings = () => {
     }
   }, [searchParams]);
 
-  const handlePayOnline = async (booking) => {
-    setMessage('');
+  const copyAccountNumber = async () => {
     try {
-      const response = await api.post('/payments/initialize', {
-        bookingId: booking._id,
-        paymentMethod: 'online'
-      });
-      const url = response.data.data.authorizationUrl;
-      if (url) {
-        window.location.href = url;
-      } else {
-        setMessage('Unable to start online payment. Please try offline proof upload.');
-      }
+      await navigator.clipboard.writeText('8106083399');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Unable to initialize payment.');
+      setMessage('Unable to copy the account number. Please copy it manually.');
     }
   };
 
   const handleUploadProof = async (event, booking) => {
     event.preventDefault();
-    if (!proofImage) {
-      setMessage('Please upload a payment proof image.');
+    if (!proofFile) {
+      setMessage('Please upload your payment receipt or transaction screenshot.');
       return;
     }
 
     const formData = new FormData();
     formData.append('bookingId', booking._id);
-    formData.append('paymentMethod', paymentMethod);
-    formData.append('paymentReference', paymentReference || booking.transactionReference || `BOOKING-${booking._id}`);
-    formData.append('proofImage', proofImage);
+    formData.append('proof', proofFile);
 
     try {
-      await api.post('/payments/upload-proof', formData);
-      setMessage('Payment proof uploaded successfully and is awaiting admin verification.');
+      await api.post('/payments/manual/proof', formData);
+      setMessage('Payment proof submitted successfully. Your payment is awaiting verification.');
       setActiveBooking(null);
-      setPaymentReference('');
-      setProofImage(null);
+      setProofFile(null);
       fetchBookings();
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to upload payment proof.');
@@ -191,10 +179,10 @@ const MyBookings = () => {
               <div className="mt-4 flex flex-col gap-3">
                 <button
                   type="button"
-                  onClick={() => handlePayOnline(booking)}
-                  className="w-full rounded-2xl bg-primary px-4 py-3 text-white hover:bg-slate-900 font-semibold"
+                  disabled
+                  className="w-full rounded-2xl bg-slate-200 px-4 py-3 text-slate-500 cursor-not-allowed font-semibold"
                 >
-                  Pay Online Now
+                  Paystack Payment - Coming Soon
                 </button>
                 <button
                   type="button"
@@ -217,22 +205,65 @@ const MyBookings = () => {
 
             {activeBooking === booking._id && (
               <form onSubmit={(event) => handleUploadProof(event, booking)} className="mt-4 space-y-4 rounded-3xl border border-slate-200 p-4 bg-slate-50">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Payment method</label>
-                  <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 bg-white">
-                    <option value="offline">Offline Transfer</option>
-                    <option value="online">Online Payment</option>
-                  </select>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-900">
+                  <p className="font-semibold">Paystack integration in progress</p>
+                  <p className="mt-1 text-sm">Automated online payment will be available soon. For now, complete payment using OPay below.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <h4 className="font-semibold text-slate-900">Pay Manually via OPay</h4>
+                  <p className="mt-1 text-sm text-slate-600">Transfer the required amount to the account below.</p>
+                  <dl className="mt-4 grid gap-2 text-sm text-slate-700">
+                    <div><dt className="inline font-medium">Account Name: </dt><dd className="inline">Miracle Obadiah</dd></div>
+                    <div><dt className="inline font-medium">Account Number: </dt><dd className="inline font-mono">8106083399</dd></div>
+                    <div><dt className="inline font-medium">Payment Provider: </dt><dd className="inline">OPay</dd></div>
+                  </dl>
+                  <button type="button" onClick={copyAccountNumber} className="mt-4 rounded-2xl border border-primary px-4 py-2 font-semibold text-primary hover:bg-primary/10">
+                    Copy Account Number
+                  </button>
+                  {copied && <p className="mt-2 text-sm font-medium text-emerald-700">Account number copied!</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Payment reference</label>
-                  <input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter transaction reference" className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" />
+                  <p className="font-semibold text-slate-800">How to complete payment:</p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-600">
+                    <li>Transfer the required amount to the OPay account above.</li>
+                    <li>Complete the transfer using your banking or OPay app.</li>
+                    <li>Keep your payment receipt or transaction screenshot.</li>
+                    <li>Upload your proof of payment below.</li>
+                    <li>Submit the proof for verification.</li>
+                    <li>An administrator will verify your payment.</li>
+                  </ol>
+                  <p className="mt-3 text-sm font-medium text-amber-700">Uploading proof does not automatically confirm payment.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Proof image</label>
-                  <input type="file" accept="image/*" onChange={(e) => setProofImage(e.target.files?.[0] || null)} className="mt-2 w-full text-slate-600" />
+                  <label className="block text-sm font-medium text-slate-700">Proof of Payment</label>
+                  <p className="mt-1 text-sm text-slate-600">Upload a JPG, JPEG, PNG, or PDF receipt (maximum 5 MB).</p>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                    onChange={(e) => {
+                      const selectedFile = e.target.files?.[0];
+                      if (!selectedFile) return;
+                      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+                      if (!allowedTypes.includes(selectedFile.type) || selectedFile.size > 5 * 1024 * 1024) {
+                        setMessage('Invalid proof file. Choose a JPG, JPEG, PNG, or PDF file up to 5 MB.');
+                        e.target.value = '';
+                        setProofFile(null);
+                        return;
+                      }
+                      setMessage('');
+                      setProofFile(selectedFile);
+                    }}
+                    className="mt-2 w-full text-slate-600"
+                  />
+                  {proofFile && (
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                      <p className="text-sm font-medium text-slate-700">{proofFile.name}</p>
+                      {proofFile.type.startsWith('image/') && <img src={URL.createObjectURL(proofFile)} alt="Payment proof preview" className="mt-3 max-h-48 rounded-xl object-contain" />}
+                      <button type="button" onClick={() => setProofFile(null)} className="mt-3 text-sm font-semibold text-rose-600 hover:text-rose-700">Remove</button>
+                    </div>
+                  )}
                 </div>
-                <button type="submit" className="w-full rounded-2xl bg-primary px-4 py-3 text-white hover:bg-slate-900 font-semibold">Submit proof</button>
+                <button type="submit" className="w-full rounded-2xl bg-primary px-4 py-3 text-white hover:bg-slate-900 font-semibold">Submit Payment Proof</button>
               </form>
             )}
           </div>

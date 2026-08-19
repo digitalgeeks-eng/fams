@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
 import Property from '../models/Property.js';
@@ -151,6 +153,61 @@ export const uploadPaymentProof = async (req, res, next) => {
   }
 };
 
+export const submitManualPaymentProof = async (req, res, next) => {
+  try {
+    const { bookingId } = req.body;
+    if (!bookingId) return res.status(400).json({ message: 'Booking id is required' });
+    if (!req.file) return res.status(400).json({ message: 'Payment proof is required' });
+
+    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable');
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    if (booking.studentId.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Unauthorized booking access' });
+    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable) {
+      return res.status(409).json({ message: 'This booking/property already has a completed payment and cannot be paid again' });
+    }
+
+    const existingPayment = await Payment.findOne({ bookingId, paymentMethod: 'manual' }).sort({ createdAt: -1 });
+    if (existingPayment?.verificationStatus === 'verified') {
+      return res.status(409).json({ message: 'This booking already has a verified payment' });
+    }
+    if (existingPayment && ['pending', 'proof_submitted'].includes(existingPayment.verificationStatus)) {
+      return res.status(409).json({ message: 'Payment proof is already awaiting verification' });
+    }
+
+    const paymentData = {
+      bookingId,
+      userId: req.user._id,
+      paymentMethod: 'manual',
+      paymentProvider: 'OPay',
+      accountName: 'Miracle Obadiah',
+      accountNumber: '8106083399',
+      paymentReference: `MANUAL-${booking._id}-${Date.now()}`,
+      transactionReference: `MANUAL-${booking._id}-${Date.now()}`,
+      amount: booking.propertyId.price,
+      proofImage: `uploads/${req.file.filename}`,
+      proofPath: `uploads/${req.file.filename}`,
+      proofFilename: req.file.originalname,
+      verificationStatus: 'proof_submitted',
+      status: 'proof_submitted',
+      submittedAt: new Date(),
+      adminNote: undefined
+    };
+
+    const payment = existingPayment
+      ? await Payment.findByIdAndUpdate(existingPayment._id, paymentData, { new: true, runValidators: true })
+      : await Payment.create(paymentData);
+
+    res.status(201).json({
+      success: true,
+      message: 'Payment proof submitted successfully. Your payment is awaiting verification.',
+      status: payment.verificationStatus,
+      data: payment
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const paymentWebhook = async (req, res, next) => {
   try {
     const signature = req.headers['x-paystack-signature'];
@@ -272,7 +329,7 @@ export const getAdminPayments = async (req, res, next) => {
 export const verifyPaymentAdmin = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, adminNote } = req.body;
     if (!id) return res.status(400).json({ message: 'Payment ID is required' });
     if (!['verified', 'rejected'].includes(status)) return res.status(400).json({ message: 'Invalid status provided' });
 
@@ -294,12 +351,21 @@ export const verifyPaymentAdmin = async (req, res, next) => {
         return res.status(409).json({ message: err.message || 'Unable to verify payment because the property is unavailable' });
       }
       payment.verificationStatus = 'verified';
+      payment.status = 'verified';
+      payment.verifiedAt = new Date();
+      payment.verifiedBy = req.user._id;
       await payment.save();
     }
 
     if (status === 'rejected' && booking) {
       booking.paymentStatus = 'failed';
       await booking.save();
+      payment.verificationStatus = 'rejected';
+      payment.status = 'rejected';
+      payment.adminNote = adminNote?.trim() || undefined;
+      payment.verifiedAt = undefined;
+      payment.verifiedBy = undefined;
+      await payment.save();
     }
 
     res.json({ message: `Payment ${status} successfully`, data: { payment, booking } });

@@ -3,7 +3,7 @@ import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { getImageUrl } from '../utils/imageUtils.js';
 
-const statusOptions = ['all', 'pending', 'verified', 'rejected'];
+const statusOptions = ['all', 'pending', 'proof_submitted', 'verified', 'rejected', 'failed'];
 const monthOptions = ['all', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 
 const PaymentVerification = () => {
@@ -29,8 +29,14 @@ const PaymentVerification = () => {
   }, []);
 
   const verify = async (id, newStatus) => {
-    await api.put(`/admin/payments/${id}/verify`, { status: newStatus });
-    setPayments((prev) => prev.map((payment) => (payment._id === id ? { ...payment, verificationStatus: newStatus } : payment)));
+    const prompt = newStatus === 'verified'
+      ? 'Are you sure you want to verify this payment?'
+      : 'Please enter an optional rejection reason:';
+    if (newStatus === 'verified' && !window.confirm(prompt)) return;
+    const adminNote = newStatus === 'rejected' ? window.prompt(prompt, 'Payment proof could not be verified. Please upload a valid payment receipt.') : undefined;
+    if (newStatus === 'rejected' && adminNote === null) return;
+    await api.put(`/admin/payments/${id}/verify`, { status: newStatus, adminNote });
+    setPayments((prev) => prev.map((payment) => (payment._id === id ? { ...payment, verificationStatus: newStatus, adminNote } : payment)));
   };
 
   const uniqueYears = useMemo(() => {
@@ -131,6 +137,8 @@ const PaymentVerification = () => {
                         <p className="text-sm uppercase tracking-wide text-slate-500">Payment</p>
                         <p className="mt-2 text-slate-700 font-semibold">Reference: {payment.paymentReference}</p>
                         <p className="text-slate-600">Method: {payment.paymentMethod}</p>
+                        {payment.paymentProvider && <p className="text-slate-600">Provider: {payment.paymentProvider}</p>}
+                        {payment.amount && <p className="text-slate-600">Amount: ₦{payment.amount.toLocaleString()}</p>}
                         <p className="text-slate-600">Status: {payment.verificationStatus}</p>
                         <p className="text-slate-600">Date: {new Date(payment.createdAt).toLocaleDateString()}</p>
                       </div>
@@ -160,6 +168,18 @@ const PaymentVerification = () => {
                       <p className="text-slate-600">Type: {property?.type || 'Unknown'}</p>
                       <p className="text-slate-600">Price: ₦{property?.price?.toLocaleString() || '0'}</p>
                     </div>
+                    {payment.paymentMethod === 'manual' && (
+                      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+                        <p className="font-semibold text-amber-900">Manual Payment Verification</p>
+                        <p className="mt-1 text-sm text-amber-800">Submitted: {payment.submittedAt ? new Date(payment.submittedAt).toLocaleString() : 'Not recorded'}</p>
+                        {payment.proofImage && (
+                          <a href={getImageUrl(payment.proofImage)} target="_blank" rel="noreferrer" className="mt-3 inline-flex font-semibold text-primary hover:underline">
+                            View Proof{payment.proofFilename ? ` (${payment.proofFilename})` : ''}
+                          </a>
+                        )}
+                        {payment.adminNote && <p className="mt-2 text-sm text-rose-700">Admin note: {payment.adminNote}</p>}
+                      </div>
+                    )}
                     {payment.bookingId?.paymentStatus === 'paid' || payment.verificationStatus === 'verified' ? (
                       <div className="mt-4 rounded-3xl bg-emerald-50 p-4 text-emerald-700">
                         This payment is already completed and marked as paid.

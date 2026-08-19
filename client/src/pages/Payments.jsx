@@ -62,6 +62,10 @@ const Payments = () => {
   return (
     <section className="space-y-6">
       <h1 className="text-2xl font-semibold">Payments</h1>
+      <div className="rounded-3xl border border-blue-200 bg-blue-50 p-6 text-blue-900">
+        <p className="font-semibold">Paystack Integration in Progress</p>
+        <p className="mt-2 text-sm">Automated Paystack payment will be available soon. For now, complete payment using the manual OPay option from your booking.</p>
+      </div>
       
       {message && (
         <div className={`rounded-2xl p-4 ${message.includes('✅') ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
@@ -83,12 +87,16 @@ const Payments = () => {
                   Status: 
                   <span className={`ml-2 px-3 py-1 rounded-full text-sm font-semibold ${
                     payment.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-                    payment.verificationStatus === 'pending' ? 'bg-amber-100 text-amber-700' :
+                    ['pending', 'proof_submitted'].includes(payment.verificationStatus) ? 'bg-amber-100 text-amber-700' :
                     'bg-rose-100 text-rose-700'
                   }`}>
-                    {payment.verificationStatus}
+                    {payment.verificationStatus === 'proof_submitted' ? 'Awaiting Verification' : payment.verificationStatus}
                   </span>
                 </p>
+                {payment.verificationStatus === 'proof_submitted' && (
+                  <p className="mt-3 text-sm text-amber-700">Your payment proof has been submitted. An administrator will review it before the booking is confirmed.</p>
+                )}
+                {payment.adminNote && <p className="mt-3 text-sm text-rose-700">Admin note: {payment.adminNote}</p>}
               </div>
             </div>
           </div>

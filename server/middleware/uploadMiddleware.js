@@ -12,7 +12,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const timestamp = Date.now();
-    const safeName = file.originalname.replace(/\s+/g, '-').toLowerCase();
+    const safeName = path.basename(file.originalname).replace(/[^a-z0-9._-]/gi, '-').toLowerCase();
     cb(null, `${timestamp}-${safeName}`);
   }
 });
@@ -45,6 +45,24 @@ export const uploadImages = multer({
   storage,
   limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter: imageFilter
+});
+
+const paymentProofFilter = (req, file, cb) => {
+  const allowedExtensions = /jpeg|jpg|png|pdf/;
+  const allowedMimeTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  const valid = allowedExtensions.test(ext) && allowedMimeTypes.includes(file.mimetype);
+  if (valid) {
+    cb(null, true);
+  } else {
+    cb(new Error('Payment proof must be a JPG, JPEG, PNG, or PDF file'));
+  }
+};
+
+export const uploadPaymentProofFile = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: paymentProofFilter
 });
 
 export const uploadVideos = multer({
