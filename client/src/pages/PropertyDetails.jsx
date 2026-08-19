@@ -94,7 +94,7 @@ const PropertyDetails = () => {
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="rounded-3xl bg-red-100 p-8 text-red-700">{error}</div>;
 
-  const isUnavailable = property?.isUnavailable;
+  const isUnavailable = property?.isUnavailable || property?.availabilityStatus === 'not_available';
   const canBook = property?.approvalStatus === 'approved' && !isUnavailable;
   const currentImageUrl = getImageUrl(property?.images?.[activeIndex]);
   const hasMultipleImages = property?.images?.length > 1;

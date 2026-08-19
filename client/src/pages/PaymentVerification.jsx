@@ -167,6 +167,10 @@ const PaymentVerification = () => {
                       <p className="text-slate-600">Location: {property?.location || 'Unknown'}</p>
                       <p className="text-slate-600">Type: {property?.type || 'Unknown'}</p>
                       <p className="text-slate-600">Price: ₦{property?.price?.toLocaleString() || '0'}</p>
+                      <p className="text-slate-600">Availability: {(property?.isUnavailable || property?.availabilityStatus === 'not_available') ? 'Not Available' : 'Available'}</p>
+                      {(property?.isUnavailable || property?.availabilityStatus === 'not_available') && property?.availabilityReason && (
+                        <p className="text-slate-600">Reason: {property.availabilityReason.replace('_', ' ')}</p>
+                      )}
                     </div>
                     {payment.paymentMethod === 'manual' && (
                       <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">

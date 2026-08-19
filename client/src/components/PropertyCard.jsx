@@ -5,6 +5,7 @@ import { getImageUrl } from '../utils/imageUtils.js';
 const PropertyCard = ({ property }) => {
   const [showDebug, setShowDebug] = useState(false);
   const imageUrl = getImageUrl(property.images?.[0]);
+  const isUnavailable = property.isUnavailable || property.availabilityStatus === 'not_available';
 
   return (
     <div className="group overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200/60 bg-white shadow-card transition duration-300 hover:-translate-y-2 hover:shadow-2xl">
@@ -19,8 +20,8 @@ const PropertyCard = ({ property }) => {
         <div className="absolute left-3 top-3 sm:left-5 sm:top-5 inline-flex items-center rounded-full bg-white/95 px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-slate-900 shadow-md backdrop-blur-sm transition duration-300 group-hover:bg-white">
           ₦{property.price?.toLocaleString()}
         </div>
-        <div className={`absolute right-3 top-3 sm:right-5 sm:top-5 inline-flex items-center rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold shadow-md backdrop-blur-sm transition duration-300 ${property.isUnavailable ? 'bg-rose-600 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-900'}`}>
-          {property.isUnavailable ? 'Not Available' : property.approvalStatus || 'Pending'}
+        <div className={`absolute right-3 top-3 sm:right-5 sm:top-5 inline-flex items-center rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold shadow-md backdrop-blur-sm transition duration-300 ${isUnavailable ? 'bg-rose-600 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-900'}`}>
+          {isUnavailable ? 'Not Available' : property.approvalStatus || 'Pending'}
         </div>
       </div>
       <div className="space-y-3 sm:space-y-4 p-4 sm:p-6">

@@ -8,7 +8,7 @@ export const createBooking = async (req, res) => {
   }
 
   const property = await Property.findById(propertyId);
-  if (!property || property.approvalStatus !== 'approved' || property.isUnavailable || (property.visibleUntil && property.visibleUntil <= new Date())) {
+  if (!property || property.approvalStatus !== 'approved' || property.isUnavailable || property.availabilityStatus === 'not_available' || (property.visibleUntil && property.visibleUntil <= new Date())) {
     return res.status(404).json({ message: 'Property not available for booking' });
   }
 
@@ -58,7 +58,7 @@ export const createBooking = async (req, res) => {
 
 export const getStudentBookings = async (req, res) => {
   const bookings = await Booking.find({ studentId: req.user._id })
-    .populate('propertyId', 'title location price images approvalStatus')
+    .populate('propertyId', 'title location price images approvalStatus isUnavailable availabilityStatus availabilityReason')
     .sort({ createdAt: -1 });
   res.json({ data: bookings });
 };
@@ -78,7 +78,7 @@ export const getAdminBookings = async (req, res) => {
     .populate('studentId', 'name email')
     .populate({
       path: 'propertyId',
-      select: 'title location price type approvalStatus images agentId',
+      select: 'title location price type approvalStatus images agentId isUnavailable availabilityStatus availabilityReason',
       populate: { path: 'agentId', select: 'name email' }
     })
     .sort({ createdAt: -1 });

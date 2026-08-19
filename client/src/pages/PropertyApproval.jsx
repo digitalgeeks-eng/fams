@@ -65,7 +65,11 @@ const PropertyApproval = () => {
                     <div>
                       <p className="font-semibold text-lg">{property.title}</p>
                       <p className="text-slate-600">Agent: {property.agentId?.name || 'Unknown'}</p>
-                      <p className="text-slate-600">Status: {property.approvalStatus}</p>
+                      <p className="text-slate-600">Approval status: {property.approvalStatus}</p>
+                      <p className="text-slate-600">Availability: {(property.isUnavailable || property.availabilityStatus === 'not_available') ? 'Not Available' : 'Available'}</p>
+                      {(property.isUnavailable || property.availabilityStatus === 'not_available') && property.availabilityReason && (
+                        <p className="text-slate-600">Reason: {property.availabilityReason.replace('_', ' ')}</p>
+                      )}
                     </div>
                     <button
                       type="button"

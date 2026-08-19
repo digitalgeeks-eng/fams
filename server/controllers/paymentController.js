@@ -15,14 +15,14 @@ export const initializePaymentController = async (req, res, next) => {
     const { bookingId, paymentMethod } = req.body;
     if (!bookingId || !paymentMethod) return res.status(400).json({ message: 'Booking id and payment method are required' });
 
-    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable');
+    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable availabilityStatus');
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
     if (booking.studentId.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Unauthorized booking access' });
-    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable) {
+    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable || booking.propertyId?.availabilityStatus === 'not_available') {
       return res.status(409).json({ message: 'This booking/property already has a completed payment and cannot be paid again' });
     }
 
-    const existingPayment = await Payment.findOne({ bookingId, verificationStatus: { $in: ['pending', 'verified'] } });
+    const existingPayment = await Payment.findOne({ bookingId, verificationStatus: { $in: ['pending', 'proof_submitted', 'verified'] } });
     if (existingPayment) {
       return res.status(409).json({ message: 'A payment already exists for this booking; use the existing payment or wait for verification.' });
     }
@@ -55,8 +55,14 @@ const verifyBookingPayment = async (payment) => {
   }
 
   const updatedProperty = await Property.findOneAndUpdate(
-    { _id: propertyId, isUnavailable: { $ne: true } },
-    { $set: { isUnavailable: true } },
+    { _id: propertyId, isUnavailable: { $ne: true }, availabilityStatus: { $ne: 'not_available' } },
+    {
+      $set: {
+        isUnavailable: true,
+        availabilityStatus: 'not_available',
+        availabilityReason: 'payment_verified'
+      }
+    },
     { new: true }
   );
 
@@ -91,15 +97,17 @@ export const verifyPaymentController = async (req, res, next) => {
       return res.status(400).json({ message: 'Payment has already been verified' });
     }
 
-    const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable');
+    const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable availabilityStatus');
     if (!booking) return res.status(404).json({ message: 'Associated booking not found' });
-    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable) {
+    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable || booking.propertyId?.availabilityStatus === 'not_available') {
       return res.status(409).json({ message: 'The booking/property already has a completed payment and cannot be paid again' });
     }
 
     if (reference.startsWith('test-')) {
       const verifiedBooking = await verifyBookingPayment(payment);
       payment.verificationStatus = 'verified';
+      payment.status = 'verified';
+      payment.verifiedAt = new Date();
       await payment.save();
       return res.json({ message: 'Test payment verified successfully', data: { payment, booking: verifiedBooking } });
     }
@@ -118,6 +126,8 @@ export const verifyPaymentController = async (req, res, next) => {
     }
 
     payment.verificationStatus = 'verified';
+    payment.status = 'verified';
+    payment.verifiedAt = new Date();
     await payment.save();
     res.json({ message: 'Payment verified successfully', data: { payment, booking: verifiedBooking } });
   } catch (error) {
@@ -131,10 +141,10 @@ export const uploadPaymentProof = async (req, res, next) => {
     if (!bookingId || !paymentMethod || !paymentReference) return res.status(400).json({ message: 'bookingId, paymentMethod and paymentReference are required' });
     if (!req.file) return res.status(400).json({ message: 'Payment proof image is required' });
 
-    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable');
+    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable availabilityStatus');
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
     if (booking.studentId.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Unauthorized booking access' });
-    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable) {
+    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable || booking.propertyId?.availabilityStatus === 'not_available') {
       return res.status(409).json({ message: 'This booking/property already has a completed payment and cannot be paid again' });
     }
 
@@ -164,10 +174,10 @@ export const submitManualPaymentProof = async (req, res, next) => {
     if (!bookingId) return res.status(400).json({ message: 'Booking id is required' });
     if (!req.file) return res.status(400).json({ message: 'Payment proof is required' });
 
-    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable');
+    const booking = await Booking.findById(bookingId).populate('propertyId', 'price isUnavailable availabilityStatus');
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
     if (booking.studentId.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Unauthorized booking access' });
-    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable) {
+    if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable || booking.propertyId?.availabilityStatus === 'not_available') {
       return res.status(409).json({ message: 'This booking/property already has a completed payment and cannot be paid again' });
     }
 
@@ -230,11 +240,13 @@ export const paymentWebhook = async (req, res, next) => {
       const reference = event.data.reference;
       const payment = await Payment.findOne({ paymentReference: reference });
       if (payment && payment.verificationStatus !== 'verified') {
-        const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable');
-        if (booking && booking.paymentStatus !== 'paid' && !booking.successfulPayment && !booking.propertyId?.isUnavailable) {
+        const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable availabilityStatus');
+        if (booking && booking.paymentStatus !== 'paid' && !booking.successfulPayment && !booking.propertyId?.isUnavailable && booking.propertyId?.availabilityStatus !== 'not_available') {
           try {
             await verifyBookingPayment(payment);
             payment.verificationStatus = 'verified';
+            payment.status = 'verified';
+            payment.verifiedAt = new Date();
             await payment.save();
           } catch (err) {
             console.warn('Payment webhook verification skipped:', err.message);
@@ -305,7 +317,7 @@ export const getAdminPayments = async (req, res, next) => {
         { path: 'studentId', select: 'name email' },
         {
           path: 'propertyId',
-          select: 'title location price type approvalStatus images agentId',
+          select: 'title location price type approvalStatus images agentId isUnavailable availabilityStatus availabilityReason',
           populate: { path: 'agentId', select: 'name email' }
         }
       ]
@@ -348,15 +360,19 @@ export const verifyPaymentAdmin = async (req, res, next) => {
     if (payment.verificationStatus === 'verified' && status === 'verified') {
       return res.status(400).json({ message: 'Payment is already verified' });
     }
+    if (status === 'verified' && !['pending', 'proof_submitted'].includes(payment.verificationStatus)) {
+      return res.status(400).json({ message: 'Only pending payment submissions can be verified' });
+    }
 
-    const booking = await Booking.findById(payment.bookingId);
+    const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable availabilityStatus availabilityReason');
     if (booking?.paymentStatus === 'paid' && status === 'verified') {
       return res.status(400).json({ message: 'Booking is already paid; no admin verification needed' });
     }
 
+    let processedBooking = booking;
     if (status === 'verified' && booking) {
       try {
-        await verifyBookingPayment(payment);
+        processedBooking = await verifyBookingPayment(payment);
       } catch (err) {
         return res.status(409).json({ message: err.message || 'Unable to verify payment because the property is unavailable' });
       }
@@ -378,7 +394,15 @@ export const verifyPaymentAdmin = async (req, res, next) => {
       await payment.save();
     }
 
-    res.json({ message: `Payment ${status} successfully`, data: { payment, booking } });
+    res.json({
+      success: true,
+      message: status === 'verified'
+        ? 'Payment verified successfully. The property has been marked as unavailable.'
+        : 'Payment rejected successfully. The property remains available.',
+      paymentStatus: payment.verificationStatus,
+      availabilityStatus: processedBooking?.propertyId?.availabilityStatus || (status === 'verified' ? 'not_available' : 'available'),
+      data: { payment, booking: processedBooking }
+    });
   } catch (error) {
     next(error);
   }

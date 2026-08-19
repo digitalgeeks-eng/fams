@@ -115,6 +115,10 @@ const AdminBookings = () => {
                         <p className="text-slate-600">Type: {property?.type || 'Unknown'}</p>
                         <p className="text-slate-600">Price: ₦{property?.price?.toLocaleString() || '0'}</p>
                         <p className="text-slate-600">Property status: {property?.approvalStatus || 'Unknown'}</p>
+                        <p className="text-slate-600">Availability: {(property?.isUnavailable || property?.availabilityStatus === 'not_available') ? 'Not Available' : 'Available'}</p>
+                        {(property?.isUnavailable || property?.availabilityStatus === 'not_available') && property?.availabilityReason && (
+                          <p className="text-slate-600">Reason: {property.availabilityReason.replace('_', ' ')}</p>
+                        )}
                       </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
