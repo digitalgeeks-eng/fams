@@ -190,7 +190,13 @@ const Register = () => {
         {step === 1 && (
           <form onSubmit={submitBasicForm} className="space-y-4 sm:space-y-5">
             <div className="flex justify-center">
-              {import.meta.env.VITE_GOOGLE_CLIENT_ID ? <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign-in failed. Please try again.')} useOneTap={false} /> : null}
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+                <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign-in failed. Please try again.')} useOneTap={false} />
+              ) : (
+                <button type="button" onClick={() => setError('Google sign-in is not configured. Add VITE_GOOGLE_CLIENT_ID to the frontend environment and restart the frontend.')} className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                  <span className="text-base font-bold text-blue-600">G</span> Continue with Google
+                </button>
+              )}
             </div>
             <label className="block">
               <span className="text-xs sm:text-sm font-medium text-slate-700">Full name *</span>

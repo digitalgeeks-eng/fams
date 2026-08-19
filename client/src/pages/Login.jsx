@@ -89,7 +89,13 @@ const Login = () => {
           </button>
           <div className="flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" />OR<span className="h-px flex-1 bg-slate-200" /></div>
           <div className="flex justify-center">
-            {import.meta.env.VITE_GOOGLE_CLIENT_ID ? <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setLocalError('Google sign-in failed. Please try again.')} useOneTap={false} /> : <p className="text-sm text-slate-500">Google sign-in is not configured.</p>}
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+              <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setLocalError('Google sign-in failed. Please try again.')} useOneTap={false} />
+            ) : (
+              <button type="button" onClick={() => setLocalError('Google sign-in is not configured. Add VITE_GOOGLE_CLIENT_ID to the frontend environment and restart the frontend.')} className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                <span className="text-base font-bold text-blue-600">G</span> Continue with Google
+              </button>
+            )}
           </div>
         </form>
       </div>
