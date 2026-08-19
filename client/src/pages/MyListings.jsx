@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { getImageUrl } from '../utils/imageUtils.js';
@@ -6,14 +7,17 @@ import { getImageUrl } from '../utils/imageUtils.js';
 const MyListings = () => {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this property? This action cannot be undone.')) return;
+    if (!window.confirm('Are you sure you want to archive this property? It will remain available to administrators.')) return;
     try {
-      await api.delete(`/properties/${id}`);
+      await api.delete(`/properties/${id}`, { data: { reason: 'Property no longer available' } });
       setListings((prev) => prev.filter((property) => property._id !== id));
+      setMessage('Property deleted successfully.');
     } catch (err) {
       console.error(err);
+      setMessage(err.response?.data?.message || 'Unable to delete property.');
     }
   };
 
@@ -36,6 +40,7 @@ const MyListings = () => {
   return (
     <section className="space-y-6">
       <h1 className="text-2xl font-semibold">My Listings</h1>
+      {message && <div className="rounded-2xl border border-slate-200 bg-white p-4 text-slate-700">{message}</div>}
       <div className="grid gap-6 lg:grid-cols-2">
         {listings.length ? listings.map((property) => {
           const imageUrl = getImageUrl(property.images?.[0]);
@@ -77,6 +82,9 @@ const MyListings = () => {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                  <Link to={`/agent/listings/${property._id}/edit`} className="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-slate-900">
+                    Edit Listing
+                  </Link>
                   <button
                     type="button"
                     onClick={() => handleDelete(property._id)}

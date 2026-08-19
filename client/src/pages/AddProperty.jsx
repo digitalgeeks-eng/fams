@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import api from '../services/api.js';
 import { LOCATIONS } from '../constants/locations.js';
 
 const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'];
 
 const AddProperty = () => {
+  const { id } = useParams();
+  const isEditMode = Boolean(id);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -24,6 +27,28 @@ const AddProperty = () => {
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!id) return;
+    const loadProperty = async () => {
+      try {
+        const response = await api.get(`/properties/${id}`);
+        const property = response.data.data;
+        setForm((current) => ({
+          ...current,
+          title: property.title || '',
+          description: property.description || '',
+          location: property.location || '',
+          type: property.type || '',
+          price: property.price || '',
+          visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : ''
+        }));
+      } catch (err) {
+        setMessage(err.response?.data?.message || 'Could not load property');
+      }
+    };
+    loadProperty();
+  }, [id]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -45,8 +70,8 @@ const AddProperty = () => {
     images.forEach((file) => data.append('images', file));
     videos.forEach((file) => data.append('videos', file));
     try {
-      await api.post('/properties', data);
-      setMessage('Property created successfully and awaiting admin approval');
+      await api[isEditMode ? 'put' : 'post'](isEditMode ? `/properties/${id}` : '/properties', data);
+      setMessage(isEditMode ? 'Property updated successfully and sent for approval' : 'Property created successfully and awaiting admin approval');
       setForm({ title: '', description: '', location: '', type: '', price: '', visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '', adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '', adminContactTwitter: '', adminContactLinkedin: '' });
       setImages([]);
       setVideos([]);
@@ -57,7 +82,7 @@ const AddProperty = () => {
 
   return (
     <section className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-semibold">Add Property</h1>
+      <h1 className="text-2xl font-semibold">{isEditMode ? 'Edit Property' : 'Add Property'}</h1>
       <form onSubmit={handleSubmit} className="rounded-3xl bg-white p-6 shadow-xl space-y-4">
         {message && <div className="rounded-xl bg-slate-100 p-4 text-slate-700">{message}</div>}
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="w-full border border-slate-300 rounded-2xl px-4 py-3" required />
@@ -158,7 +183,7 @@ const AddProperty = () => {
         </div>
         <input type="file" multiple accept="image/*" onChange={(e) => setImages([...e.target.files])} className="w-full text-slate-600" />
         <input type="file" multiple accept="video/*" onChange={(e) => setVideos([...e.target.files])} className="w-full text-slate-600" />
-        <button className="px-6 py-3 bg-primary text-white rounded-2xl">Submit listing</button>
+        <button className="px-6 py-3 bg-primary text-white rounded-2xl">{isEditMode ? 'Save changes' : 'Submit listing'}</button>
       </form>
     </section>
   );

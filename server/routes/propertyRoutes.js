@@ -10,7 +10,9 @@ import {
   updateProperty,
   deleteProperty,
   getAgentProperties,
-  rateProperty
+  rateProperty,
+  getPropertyHistory,
+  restoreProperty
 } from '../controllers/propertyController.js';
 
 const router = express.Router();
@@ -37,6 +39,8 @@ router.put(
   ]),
   asyncHandler(updateProperty)
 );
+router.get('/:id/history', protect, authorizeRoles('admin'), asyncHandler(getPropertyHistory));
+router.patch('/:id/restore', protect, authorizeRoles('admin'), asyncHandler(restoreProperty));
 router.post('/:id/rate', protect, authorizeRoles('student'), asyncHandler(rateProperty));
 router.delete('/:id', protect, authorizeRoles('agent', 'admin'), asyncHandler(deleteProperty));
 export default router;

@@ -14,6 +14,7 @@ import {
   updateUserRole,
   deleteUser
 } from '../controllers/adminController.js';
+import { getDeletedProperties } from '../controllers/propertyController.js';
 import { getAdminPayments, verifyPaymentAdmin } from '../controllers/paymentController.js';
 import { getAdminBookings } from '../controllers/bookingController.js';
 
@@ -24,6 +25,7 @@ router.get('/agents', asyncHandler(listAgents));
 router.get('/agents/:id', asyncHandler(getAgentDetails));
 router.put('/agents/:id/verify', asyncHandler(verifyAgent));
 router.get('/properties', asyncHandler(listPropertiesAdmin));
+router.get('/properties/deleted', asyncHandler(getDeletedProperties));
 router.put('/properties/:id/approve', asyncHandler(approveProperty));
 router.get('/payments', asyncHandler(getAdminPayments));
 router.get('/bookings', asyncHandler(getAdminBookings));

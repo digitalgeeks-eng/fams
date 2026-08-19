@@ -1,5 +1,7 @@
 import Property from '../models/Property.js';
 import Booking from '../models/Booking.js';
+import Payment from '../models/Payment.js';
+import PropertyEditHistory from '../models/PropertyEditHistory.js';
 import { updateRecommendationData } from '../services/recommendationService.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
@@ -23,6 +25,7 @@ export const listProperties = async (req, res) => {
   const { search, location, type, priceRange, page = 1, limit = 12 } = req.query;
   const filter = {
     approvalStatus: 'approved',
+    isDeleted: { $ne: true },
     $or: [
       { visibleUntil: { $exists: false } },
       { visibleUntil: null },
@@ -50,6 +53,7 @@ export const listProperties = async (req, res) => {
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).populate('agentId', 'name email');
   if (!property) return res.status(404).json({ message: 'Property not found' });
+  if (property.isDeleted && req.user?.role !== 'admin') return res.status(404).json({ message: 'Property not found' });
   if (req.user?.role === 'student' && (property.visibleUntil && property.visibleUntil <= new Date())) {
     return res.status(404).json({ message: 'Property not found' });
   }
@@ -109,41 +113,60 @@ export const createProperty = async (req, res) => {
 export const updateProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
   if (!property) return res.status(404).json({ message: 'Property not found' });
+  if (property.isDeleted) return res.status(409).json({ message: 'Deleted properties must be restored before they can be edited' });
   if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to edit this property' });
   }
 
-  const updates = {
-    title: req.body.title || property.title,
-    description: req.body.description || property.description,
-    location: req.body.location || property.location,
-    type: req.body.type || property.type,
-    price: req.body.price || property.price,
-    visibleUntil: req.body.visibleUntil ? new Date(req.body.visibleUntil) : property.visibleUntil,
-    approvalStatus: 'pending',
-    adminContact: {
-      name: req.body.adminContactName || property.adminContact?.name || '',
-      email: req.body.adminContactEmail || property.adminContact?.email || '',
-      phone: req.body.adminContactPhone || property.adminContact?.phone || '',
-      whatsapp: req.body.adminContactWhatsapp || property.adminContact?.whatsapp || '',
-      facebook: req.body.adminContactFacebook || property.adminContact?.facebook || '',
-      instagram: req.body.adminContactInstagram || property.adminContact?.instagram || '',
-      twitter: req.body.adminContactTwitter || property.adminContact?.twitter || '',
-      linkedin: req.body.adminContactLinkedin || property.adminContact?.linkedin || ''
+  const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
+  const updates = { approvalStatus: 'pending' };
+  const changes = [];
+  editableFields.forEach((field) => {
+    if (req.body[field] === undefined) return;
+    const newValue = field === 'visibleUntil' ? (req.body[field] ? new Date(req.body[field]) : undefined) : req.body[field];
+    const oldValue = property[field];
+    if (String(oldValue ?? '') !== String(newValue ?? '')) {
+      changes.push({ field, oldValue, newValue });
+      updates[field] = newValue;
     }
+  });
+  const contactFields = {
+    name: 'adminContactName', email: 'adminContactEmail', phone: 'adminContactPhone',
+    whatsapp: 'adminContactWhatsapp', facebook: 'adminContactFacebook',
+    instagram: 'adminContactInstagram', twitter: 'adminContactTwitter', linkedin: 'adminContactLinkedin'
   };
+  const nextContact = { ...property.adminContact?.toObject?.(), ...property.adminContact?.toObject?.() };
+  Object.entries(contactFields).forEach(([field, requestField]) => {
+    if (req.body[requestField] === undefined) return;
+    const newValue = req.body[requestField] || '';
+    if ((property.adminContact?.[field] || '') !== newValue) {
+      changes.push({ field: `adminContact.${field}`, oldValue: property.adminContact?.[field] || '', newValue });
+      nextContact[field] = newValue;
+    }
+  });
+  if (Object.keys(nextContact).length) updates.adminContact = nextContact;
   if (req.files) {
     if (req.files.images?.length) {
       updates.images = await uploadPropertyMediaToCloudinary(req.files.images);
+      changes.push({ field: 'images', oldValue: property.images, newValue: updates.images });
     }
     if (req.files.videos?.length) {
       updates.videos = await uploadPropertyMediaToCloudinary(req.files.videos);
+      changes.push({ field: 'videos', oldValue: property.videos, newValue: updates.videos });
     }
   }
 
   const updatedProperty = await Property.findByIdAndUpdate(req.params.id, updates, { new: true });
   if (req.files?.images?.length) await deleteCloudinaryMedia(property.images);
   if (req.files?.videos?.length) await deleteCloudinaryMedia(property.videos);
+  if (changes.length) {
+    await PropertyEditHistory.create({
+      propertyId: property._id,
+      editedBy: req.user._id,
+      editorRole: req.user.role,
+      changes
+    });
+  }
   res.json({ message: 'Property updated and sent for approval', data: updatedProperty });
 };
 
@@ -193,12 +216,70 @@ export const deleteProperty = async (req, res) => {
   if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to delete this property' });
   }
-  await deleteCloudinaryMedia([...property.images, ...property.videos]);
-  await property.remove();
-  res.json({ message: 'Property deleted successfully' });
+  if (property.isDeleted) return res.status(409).json({ message: 'Property is already archived' });
+  property.isDeleted = true;
+  property.deletedAt = new Date();
+  property.deletedBy = req.user._id;
+  property.deletedByRole = req.user.role;
+  property.deleteReason = req.body?.reason?.trim() || 'Property archived by owner';
+  await property.save();
+  await PropertyEditHistory.create({
+    propertyId: property._id,
+    editedBy: req.user._id,
+    editorRole: req.user.role,
+    changes: [
+      { field: 'isDeleted', oldValue: false, newValue: true },
+      { field: 'deleteReason', oldValue: undefined, newValue: property.deleteReason }
+    ]
+  });
+  res.json({ success: true, message: 'Property deleted successfully.', data: property });
 };
 
 export const getAgentProperties = async (req, res) => {
-  const properties = await Property.find({ agentId: req.user._id }).sort({ createdAt: -1 });
+  const properties = await Property.find({ agentId: req.user._id, isDeleted: { $ne: true } }).sort({ createdAt: -1 });
   res.json({ data: properties });
+};
+
+export const getDeletedProperties = async (req, res) => {
+  const properties = await Property.find({ isDeleted: true })
+    .populate('agentId', 'name email')
+    .populate('deletedBy', 'name email')
+    .sort({ deletedAt: -1 });
+  res.json({ data: properties });
+};
+
+export const getPropertyHistory = async (req, res, next) => {
+  try {
+    const property = await Property.findById(req.params.id).populate('agentId', 'name email').populate('deletedBy', 'name email');
+    if (!property) return res.status(404).json({ message: 'Property not found' });
+    const [history, bookings, payments] = await Promise.all([
+      PropertyEditHistory.find({ propertyId: property._id }).populate('editedBy', 'name email').sort({ editedAt: -1 }),
+      Booking.find({ propertyId: property._id }).populate('studentId', 'name email').sort({ createdAt: -1 }),
+      Payment.find({ bookingId: { $in: await Booking.find({ propertyId: property._id }).distinct('_id') } }).sort({ createdAt: -1 })
+    ]);
+    res.json({ data: { property, history, bookings, payments } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const restoreProperty = async (req, res) => {
+  const property = await Property.findById(req.params.id);
+  if (!property) return res.status(404).json({ message: 'Property not found' });
+  if (!property.isDeleted) return res.status(409).json({ message: 'Property is not archived' });
+  property.isDeleted = false;
+  property.deletedAt = undefined;
+  property.deletedBy = undefined;
+  property.deletedByRole = undefined;
+  property.deleteReason = undefined;
+  if (property.availabilityReason === 'payment_verified' || property.isUnavailable) {
+    property.availabilityStatus = 'not_available';
+    property.isUnavailable = true;
+  } else {
+    property.availabilityStatus = 'available';
+    property.isUnavailable = false;
+    property.availabilityReason = undefined;
+  }
+  await property.save();
+  res.json({ success: true, message: 'Property restored successfully.', data: property });
 };

@@ -8,7 +8,7 @@ export const getAnalytics = async (req, res) => {
   const totalStudents = await User.countDocuments({ role: 'student' });
   const verifiedAgents = await User.countDocuments({ role: 'agent', verificationStatus: 'verified' });
   const pendingAgents = await User.countDocuments({ role: 'agent', verificationStatus: 'pending' });
-  const activeProperties = await Property.countDocuments({ approvalStatus: 'approved' });
+  const activeProperties = await Property.countDocuments({ approvalStatus: 'approved', isDeleted: { $ne: true } });
   const totalBookings = await Booking.countDocuments();
   const totalPayments = await Payment.countDocuments({ verificationStatus: 'verified' });
   const pendingComplaints = await Complaint.countDocuments({ status: 'pending' });
@@ -53,7 +53,10 @@ export const verifyAgent = async (req, res) => {
 };
 
 export const listPropertiesAdmin = async (req, res) => {
-  const properties = await Property.find().populate('agentId', 'name email').sort({ createdAt: -1 });
+  const properties = await Property.find()
+    .populate('agentId', 'name email')
+    .populate('deletedBy', 'name email')
+    .sort({ createdAt: -1 });
   res.json({ data: properties });
 };
 
