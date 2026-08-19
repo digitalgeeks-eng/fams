@@ -189,7 +189,7 @@ const MyBookings = () => {
                   onClick={() => setActiveBooking(activeBooking === booking._id ? null : booking._id)}
                   className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-700 hover:bg-slate-50 font-semibold"
                 >
-                  {activeBooking === booking._id ? '✕ Cancel' : '+ Upload Proof'}
+                  {activeBooking === booking._id ? '✕ Cancel' : '+ Make Payment here/ Upload Proof'}
                 </button>
               </div>
             )}
