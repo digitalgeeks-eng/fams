@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { GoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
   const [localError, setLocalError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, error: contextError, setError: setContextError } = useAuth();
+  const { login, loginWithGoogle, error: contextError, setError: setContextError } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,6 +29,20 @@ const Login = () => {
       setLoading(false);
       const errorMessage = err.response?.data?.message || contextError || 'Unable to log in';
       setLocalError(errorMessage);
+    }
+  };
+
+  const handleGoogleSuccess = async (response) => {
+    setLoading(true);
+    setLocalError('');
+    try {
+      const result = await loginWithGoogle(response.credential);
+      const role = result?.data?.user?.role;
+      navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/agent' : '/student');
+    } catch (err) {
+      setLocalError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -72,6 +87,10 @@ const Login = () => {
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
+          <div className="flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" />OR<span className="h-px flex-1 bg-slate-200" /></div>
+          <div className="flex justify-center">
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID ? <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setLocalError('Google sign-in failed. Please try again.')} useOneTap={false} /> : <p className="text-sm text-slate-500">Google sign-in is not configured.</p>}
+          </div>
         </form>
       </div>
     </section>

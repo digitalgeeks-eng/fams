@@ -4,10 +4,21 @@ import dotenv from 'dotenv';
 import User from '../models/User.js';
 import { validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
+import { OAuth2Client } from 'google-auth-library';
 
 dotenv.config();
 
 const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const userResponse = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  verificationStatus: user.verificationStatus,
+  profileImage: user.profileImage
+});
 
 export const register = async (req, res) => {
   const missing = validateRequired(['name', 'email', 'password', 'role'], req.body);
@@ -66,7 +77,7 @@ export const register = async (req, res) => {
     userData.licenseImage = licenseImage.secure_url;
   }
 
-  const user = await User.create(userData);
+  const user = await User.create({ ...userData, authProvider: 'local' });
   const token = generateToken(user._id);
 
   res.status(201).json({
@@ -95,7 +106,7 @@ export const login = async (req, res) => {
 
   const { email, password } = req.body;
   const normalizedEmail = email?.trim().toLowerCase();
-  const user = await User.findOne({ email: normalizedEmail });
+  const user = await User.findOne({ email: normalizedEmail }).select('+password');
   if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
   const isMatch = await bcrypt.compare(password, user.password);
@@ -108,7 +119,52 @@ export const login = async (req, res) => {
   });
 };
 
+export const googleLogin = async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ message: 'Google credential is required' });
+  if (!process.env.GOOGLE_CLIENT_ID) return res.status(503).json({ message: 'Google authentication is not configured' });
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    payload = ticket.getPayload();
+  } catch (error) {
+    return res.status(401).json({ message: 'Google authentication failed. Please try again.' });
+  }
+
+  if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+    return res.status(401).json({ message: 'Google account email must be verified.' });
+  }
+
+  const normalizedEmail = payload.email.trim().toLowerCase();
+  let user = await User.findOne({ googleId: payload.sub }).select('+password');
+  if (!user) user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+  if (user) {
+    user.googleId = payload.sub;
+    user.authProvider = user.password ? 'both' : 'google';
+    if (!user.profileImage && payload.picture) user.profileImage = payload.picture;
+    await user.save();
+  } else {
+    user = await User.create({
+      name: payload.name?.trim() || normalizedEmail.split('@')[0],
+      email: normalizedEmail,
+      googleId: payload.sub,
+      authProvider: 'google',
+      profileImage: payload.picture,
+      role: 'student',
+      verificationStatus: 'verified'
+    });
+  }
+
+  const token = generateToken(user._id);
+  res.json({ message: 'Google login successful', data: { user: userResponse(user), token } });
+};
+
 export const getMe = async (req, res) => {
   const user = req.user;
-  res.json({ data: { id: user._id, name: user.name, email: user.email, role: user.role, verificationStatus: user.verificationStatus } });
+  res.json({ data: userResponse(user) });
 };

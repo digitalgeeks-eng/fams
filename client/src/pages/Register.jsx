@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api.js';
 import { setAuthToken } from '../services/api.js';
+import { GoogleLogin } from '@react-oauth/google';
+import { useAuth } from '../hooks/useAuth.jsx';
 
 const Register = () => {
   const [step, setStep] = useState(1); // Step 1: Basic, Step 2: Agent details (if agent)
@@ -24,6 +26,7 @@ const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { loginWithGoogle } = useAuth();
   const cameraRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -148,6 +151,20 @@ const Register = () => {
     }
   };
 
+  const handleGoogleSuccess = async (response) => {
+    try {
+      setLoading(true);
+      setError('');
+      const result = await loginWithGoogle(response.credential);
+      const role = result?.data?.user?.role;
+      navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/agent' : '/student');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="relative mx-auto mb-12 sm:mb-16 max-w-2xl px-3 sm:px-4 py-6 sm:py-8 lg:px-8">
       <div className="overflow-hidden rounded-2xl sm:rounded-3xl bg-white p-6 sm:p-8 shadow-card ring-1 ring-slate-200">
@@ -172,6 +189,9 @@ const Register = () => {
         {/* STEP 1: Basic Registration */}
         {step === 1 && (
           <form onSubmit={submitBasicForm} className="space-y-4 sm:space-y-5">
+            <div className="flex justify-center">
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID ? <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign-in failed. Please try again.')} useOneTap={false} /> : null}
+            </div>
             <label className="block">
               <span className="text-xs sm:text-sm font-medium text-slate-700">Full name *</span>
               <input

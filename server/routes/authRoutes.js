@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getMe } from '../controllers/authController.js';
+import { register, login, googleLogin, getMe } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { uploadImages } from '../middleware/uploadMiddleware.js';
@@ -10,5 +10,6 @@ router.post('/register', uploadImages.fields([
   { name: 'licenseImage', maxCount: 1 }
 ]), asyncHandler(register));
 router.post('/login', asyncHandler(login));
+router.post('/google', asyncHandler(googleLogin));
 router.get('/me', protect, asyncHandler(getMe));
 export default router;

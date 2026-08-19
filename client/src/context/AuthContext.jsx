@@ -61,6 +61,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (credential) => {
+    try {
+      const response = await api.post('/auth/google', { credential });
+      const token = response.data.data.token;
+      localStorage.setItem('amsToken', token);
+      setAuthToken(token);
+      setUser(response.data.data.user);
+      setError(null);
+      return response.data;
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || 'Google sign-in failed. Please try again.';
+      setError(errorMsg);
+      throw err;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('amsToken');
     setAuthToken(null);
@@ -69,7 +85,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, register, logout, setError, clearError: () => setError(null) }}>
+    <AuthContext.Provider value={{ user, loading, error, login, loginWithGoogle, register, logout, setError, clearError: () => setError(null) }}>
       {children}
     </AuthContext.Provider>
   );
