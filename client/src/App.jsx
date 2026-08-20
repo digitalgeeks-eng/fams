@@ -7,6 +7,7 @@ import Listings from './pages/Listings.jsx';
 import PropertyDetails from './pages/PropertyDetails.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
 import AgentDashboard from './pages/AgentDashboard.jsx';
+import AgentProfile from './pages/AgentProfile.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import MyBookings from './pages/MyBookings.jsx';
 import Payments from './pages/Payments.jsx';
@@ -51,6 +52,7 @@ const App = () => (
           <Route path="/complaints" element={<PrivateRoute><Complaints /></PrivateRoute>} />
           <Route path="/student/recommendations" element={<PrivateRoute role="student"><Recommendations /></PrivateRoute>} />
           <Route path="/agent" element={<PrivateRoute role="agent"><AgentDashboard /></PrivateRoute>} />
+          <Route path="/agent/profile" element={<PrivateRoute role="agent"><AgentProfile /></PrivateRoute>} />
           <Route path="/agent/listings" element={<PrivateRoute role="agent"><MyListings /></PrivateRoute>} />
           <Route path="/agent/add-property" element={<PrivateRoute role="agent"><AddProperty /></PrivateRoute>} />
           <Route path="/agent/listings/:id/edit" element={<PrivateRoute role="agent"><AddProperty /></PrivateRoute>} />

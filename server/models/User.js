@@ -19,6 +19,9 @@ const userSchema = new mongoose.Schema({
   idNumber: { type: String, trim: true },
   idImage: { type: String },
   bio: { type: String, trim: true },
+  accountNumber: { type: String, trim: true },
+  bankName: { type: String, trim: true },
+  accountName: { type: String, trim: true },
   // Enhanced agent fields for better verification
   yearsOfExperience: { type: Number, min: 0 },
   licenseNumber: { type: String, trim: true },

@@ -68,6 +68,7 @@ const Navbar = () => {
 
           {user && user.role === 'agent' && (
             <>
+              <MenuLink to="/agent/profile" label="Profile" />
               <MenuLink to="/agent/listings" label="My Listings" />
               <MenuLink to="/agent/add-property" label="Add Property" />
               <MenuLink to="/agent/booking-requests" label="Booking Requests" />
@@ -139,6 +140,7 @@ const Navbar = () => {
 
           {user && user.role === 'agent' && (
             <>
+              <MenuLink to="/agent/profile" label="Profile" />
               <MenuLink to="/agent/listings" label="My Listings" />
               <MenuLink to="/agent/add-property" label="Add Property" />
               <MenuLink to="/agent/booking-requests" label="Booking Requests" />

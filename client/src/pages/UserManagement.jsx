@@ -9,6 +9,7 @@ const UserManagement = () => {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
   const [filters, setFilters] = useState({ search: '', role: 'all', status: 'all', verificationStatus: 'all', authProvider: 'all' });
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showBankNumber, setShowBankNumber] = useState(false);
   const [message, setMessage] = useState('');
 
   const fetchUsers = async (page = 1) => {
@@ -147,7 +148,25 @@ const UserManagement = () => {
         )}
       </div>
       <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm"><button disabled={pagination.page <= 1} onClick={() => fetchUsers(pagination.page - 1)} className="rounded-xl border px-3 py-2 disabled:opacity-40">Previous</button><span>Page {pagination.page} of {pagination.totalPages || 1}</span><button disabled={pagination.page >= pagination.totalPages} onClick={() => fetchUsers(pagination.page + 1)} className="rounded-xl border px-3 py-2 disabled:opacity-40">Next</button></div>
-      {selectedUser && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setSelectedUser(null)}><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6" onClick={(event) => event.stopPropagation()}><div className="flex justify-between"><h2 className="text-xl font-semibold">User details</h2><button onClick={() => setSelectedUser(null)}>Close</button></div><div className="mt-4 space-y-2 text-slate-700"><p><b>Name:</b> {selectedUser.user.name}</p><p><b>Email:</b> {selectedUser.user.email}</p><p><b>Role:</b> {selectedUser.user.role}</p><p><b>Status:</b> {selectedUser.user.status || 'active'}</p><p><b>Provider:</b> {selectedUser.user.authProvider || 'local'}</p><p><b>Properties:</b> {selectedUser.properties.length}</p><p><b>Bookings:</b> {selectedUser.bookings.length}</p><p><b>Payments:</b> {selectedUser.payments.length}</p><p><b>Complaints:</b> {selectedUser.complaints.length}</p></div><h3 className="mt-6 font-semibold">Management history</h3>{selectedUser.history.map((entry) => <p key={entry._id} className="mt-2 rounded-xl bg-slate-50 p-3 text-sm">{entry.action} by {entry.adminId?.name || 'admin'} on {new Date(entry.createdAt).toLocaleString()}</p>)}</div></div>}
+      {selectedUser && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setSelectedUser(null)}><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6" onClick={(event) => event.stopPropagation()}><div className="flex justify-between"><h2 className="text-xl font-semibold">User details</h2><button onClick={() => setSelectedUser(null)}>Close</button></div><div className="mt-4 space-y-2 text-slate-700"><p><b>Name:</b> {selectedUser.user.name}</p><p><b>Email:</b> {selectedUser.user.email}</p><p><b>Role:</b> {selectedUser.user.role}</p><p><b>Status:</b> {selectedUser.user.status || 'active'}</p><p><b>Provider:</b> {selectedUser.user.authProvider || 'local'}</p><p><b>Properties:</b> {selectedUser.properties.length}</p><p><b>Bookings:</b> {selectedUser.bookings.length}</p><p><b>Payments:</b> {selectedUser.payments.length}</p><p><b>Complaints:</b> {selectedUser.complaints.length}</p></div>
+        {selectedUser.user.role === 'agent' && (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-slate-900">Bank / Payment Information</h3>
+              {selectedUser.user.accountNumber && (
+                <button type="button" onClick={() => setShowBankNumber((prev) => !prev)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
+                  {showBankNumber ? 'Hide' : 'Show'} account number
+                </button>
+              )}
+            </div>
+            <div className="space-y-2 text-sm text-slate-700">
+              <p><b>Account Name:</b> {selectedUser.user.accountName || 'Not provided'}</p>
+              <p><b>Bank Name:</b> {selectedUser.user.bankName || 'Not provided'}</p>
+              <p><b>Account Number:</b> {selectedUser.user.accountNumber ? (showBankNumber ? selectedUser.user.accountNumber : '********' + String(selectedUser.user.accountNumber).slice(-4)) : 'Not provided'}</p>
+            </div>
+          </div>
+        )}
+        <h3 className="mt-6 font-semibold">Management history</h3>{selectedUser.history.map((entry) => <p key={entry._id} className="mt-2 rounded-xl bg-slate-50 p-3 text-sm">{entry.action} by {entry.adminId?.name || 'admin'} on {new Date(entry.createdAt).toLocaleString()}</p>)}</div></div>}
     </section>
   );
 };

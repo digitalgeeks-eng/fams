@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import User from '../models/User.js';
-import { validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
+import { validateBankDetails, validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -29,7 +29,7 @@ export const register = async (req, res) => {
     return res.status(400).json({ message: `Missing fields: ${missing.join(', ')}` });
   }
 
-  const { name, email, password, role, phone, company, address, yearsOfExperience, licenseNumber, bio } = req.body;
+  const { name, email, password, role, phone, company, address, yearsOfExperience, licenseNumber, bio, accountNumber, bankName, accountName } = req.body;
   const normalizedName = name?.trim();
   const normalizedEmail = email?.trim().toLowerCase();
   const normalizedRole = role?.trim().toLowerCase();
@@ -45,6 +45,11 @@ export const register = async (req, res) => {
     if (!address?.trim()) return res.status(400).json({ message: 'Address is required for agents' });
     if (yearsOfExperience === undefined || yearsOfExperience === null || yearsOfExperience === '' || Number.isNaN(Number(yearsOfExperience)) || Number(yearsOfExperience) < 0) return res.status(400).json({ message: 'Years of experience is required for agents' });
     if (!req.files?.idImage?.[0]) return res.status(400).json({ message: 'Passport or ID photo is required.' });
+
+    const bankValidation = validateBankDetails({ accountNumber, bankName, accountName });
+    if (!bankValidation.valid) {
+      return res.status(400).json({ message: bankValidation.message });
+    }
   }
 
   const existingUser = await User.findOne({ email: normalizedEmail });
@@ -69,6 +74,14 @@ export const register = async (req, res) => {
     userData.yearsOfExperience = parseInt(yearsOfExperience);
     if (licenseNumber?.trim()) userData.licenseNumber = licenseNumber.trim();
     if (bio?.trim()) userData.bio = bio.trim();
+
+    const bankValidation = validateBankDetails({ accountNumber, bankName, accountName });
+    if (bankValidation.valid && (bankValidation.normalized.accountNumber || bankValidation.normalized.bankName || bankValidation.normalized.accountName)) {
+      userData.accountNumber = bankValidation.normalized.accountNumber;
+      userData.bankName = bankValidation.normalized.bankName;
+      userData.accountName = bankValidation.normalized.accountName;
+    }
+
     const idImage = await uploadBufferToCloudinary(req.files.idImage[0].buffer, { folder: 'fulafia-ams/agents/identity', resourceType: 'image' });
     userData.idImage = idImage.secure_url;
     if (req.files.licenseImage?.[0]) {

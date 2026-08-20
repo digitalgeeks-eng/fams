@@ -18,7 +18,10 @@ const Register = () => {
     address: '',
     yearsOfExperience: '',
     licenseNumber: '',
-    bio: ''
+    bio: '',
+    accountNumber: '',
+    bankName: '',
+    accountName: ''
   });
   const [idImage, setIdImage] = useState(null);
   const [licenseImage, setLicenseImage] = useState(null);
@@ -122,6 +125,10 @@ const Register = () => {
         if (form.company.trim()) formData.append('company', form.company.trim());
         if (form.licenseNumber.trim()) formData.append('licenseNumber', form.licenseNumber.trim());
         if (form.bio.trim()) formData.append('bio', form.bio.trim());
+
+        if (form.accountNumber.trim()) formData.append('accountNumber', form.accountNumber.trim());
+        if (form.bankName.trim()) formData.append('bankName', form.bankName.trim());
+        if (form.accountName.trim()) formData.append('accountName', form.accountName.trim());
 
         // Add images if captured
         if (idImage) {
