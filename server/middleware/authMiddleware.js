@@ -20,6 +20,10 @@ export const protect = async (req, res, next) => {
       res.status(401);
       return next(new Error('User not found'));
     }
+    if (user.status && user.status !== 'active') {
+      res.status(403);
+      return next(new Error(`Account is ${user.status}. Contact an administrator.`));
+    }
 
     req.user = user;
     next();

@@ -7,6 +7,9 @@ const userSchema = new mongoose.Schema({
   googleId: { type: String, unique: true, sparse: true, index: true },
   authProvider: { type: String, enum: ['local', 'google', 'both'], default: 'local' },
   profileImage: { type: String },
+  status: { type: String, enum: ['active', 'suspended', 'deactivated'], default: 'active' },
+  updatedAt: { type: Date, default: Date.now },
+  lastLoginAt: { type: Date },
   role: { type: String, enum: ['student', 'agent', 'admin'], default: 'student' },
   verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
   // Agent specific fields

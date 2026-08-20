@@ -17,7 +17,10 @@ const userResponse = (user) => ({
   email: user.email,
   role: user.role,
   verificationStatus: user.verificationStatus,
-  profileImage: user.profileImage
+  profileImage: user.profileImage,
+  authProvider: user.authProvider,
+  status: user.status || 'active',
+  lastLoginAt: user.lastLoginAt
 });
 
 export const register = async (req, res) => {
@@ -111,8 +114,11 @@ export const login = async (req, res) => {
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+  if (user.status && user.status !== 'active') return res.status(403).json({ message: `Account is ${user.status}. Contact an administrator.` });
 
   const token = generateToken(user._id);
+  user.lastLoginAt = new Date();
+  await user.save();
   res.json({
     message: 'Login successful',
     data: { user: { id: user._id, name: user.name, email: user.email, role: user.role, verificationStatus: user.verificationStatus }, token }
@@ -144,6 +150,7 @@ export const googleLogin = async (req, res) => {
   if (!user) user = await User.findOne({ email: normalizedEmail }).select('+password');
 
   if (user) {
+    if (user.status && user.status !== 'active') return res.status(403).json({ message: `Account is ${user.status}. Contact an administrator.` });
     user.googleId = payload.sub;
     user.authProvider = user.password ? 'both' : 'google';
     if (!user.profileImage && payload.picture) user.profileImage = payload.picture;
@@ -159,6 +166,9 @@ export const googleLogin = async (req, res) => {
       verificationStatus: 'verified'
     });
   }
+
+  user.lastLoginAt = new Date();
+  await user.save();
 
   const token = generateToken(user._id);
   res.json({ message: 'Google login successful', data: { user: userResponse(user), token } });

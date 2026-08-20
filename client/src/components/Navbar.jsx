@@ -48,6 +48,7 @@ const Navbar = () => {
             <>
               <MenuLink to="/admin/agents" label="Agents" />
               <MenuLink to="/admin/properties" label="Properties" />
+              <MenuLink to="/admin/users" label="Users" />
               <MenuLink to="/admin/payments" label="Payments" />
               <MenuLink to="/complaints" label="Complaints" />
               <MenuLink to="/admin/notifications" label="Send Notification" />
@@ -116,6 +117,7 @@ const Navbar = () => {
             <>
               <MenuLink to="/admin/agents" label="Agents" />
               <MenuLink to="/admin/properties" label="Properties" />
+              <MenuLink to="/admin/users" label="Users" />
               <MenuLink to="/admin/payments" label="Payments" />
               <MenuLink to="/complaints" label="Complaints" />
               <MenuLink to="/admin/notifications" label="Send Notification" />

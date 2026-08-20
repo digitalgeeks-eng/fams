@@ -14,6 +14,7 @@ import {
   updateUserRole,
   deleteUser
 } from '../controllers/adminController.js';
+import { getUserAdmin, updateUserAdmin, updateUserStatus } from '../controllers/adminController.js';
 import { getDeletedProperties } from '../controllers/propertyController.js';
 import { getAdminPayments, verifyPaymentAdmin } from '../controllers/paymentController.js';
 import { getAdminBookings } from '../controllers/bookingController.js';
@@ -32,6 +33,9 @@ router.get('/bookings', asyncHandler(getAdminBookings));
 router.put('/payments/:id/verify', asyncHandler(verifyPaymentAdmin));
 router.get('/complaints', asyncHandler(listComplaintsAdmin));
 router.get('/users', asyncHandler(listUsersAdmin));
+router.get('/users/:id', asyncHandler(getUserAdmin));
+router.put('/users/:id', asyncHandler(updateUserAdmin));
+router.patch('/users/:id/status', asyncHandler(updateUserStatus));
 router.put('/users/:id/role', asyncHandler(updateUserRole));
 router.delete('/users/:id', asyncHandler(deleteUser));
 export default router;
