@@ -43,4 +43,15 @@ const propertySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+propertySchema.pre('validate', function (next) {
+  const hasMedia = Array.isArray(this.images) && this.images.length > 0
+    || Array.isArray(this.videos) && this.videos.length > 0;
+
+  if (!hasMedia) {
+    return next(new Error('Please upload at least one property image or video before listing this property.'));
+  }
+
+  next();
+});
+
 export default mongoose.model('Property', propertySchema);

@@ -26,6 +26,7 @@ const AddProperty = () => {
   });
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
+  const [existingMediaCount, setExistingMediaCount] = useState(0);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -34,6 +35,7 @@ const AddProperty = () => {
       try {
         const response = await api.get(`/properties/${id}`);
         const property = response.data.data;
+        setExistingMediaCount((property.images?.length || 0) + (property.videos?.length || 0));
         setForm((current) => ({
           ...current,
           title: property.title || '',
@@ -52,6 +54,14 @@ const AddProperty = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const totalSelectedMedia = images.length + videos.length;
+    const totalMedia = totalSelectedMedia + existingMediaCount;
+
+    if (totalMedia === 0) {
+      setMessage('Please upload at least one property image or video before listing this property.');
+      return;
+    }
+
     const data = new FormData();
     data.append('title', form.title);
     data.append('description', form.description);
@@ -75,6 +85,7 @@ const AddProperty = () => {
       setForm({ title: '', description: '', location: '', type: '', price: '', visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '', adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '', adminContactTwitter: '', adminContactLinkedin: '' });
       setImages([]);
       setVideos([]);
+      setExistingMediaCount(0);
     } catch (err) {
       setMessage(err.response?.data?.message || 'Could not submit listing');
     }

@@ -83,8 +83,14 @@ export const createProperty = async (req, res) => {
   if (!title || !description || !location || !type || !price) {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
   }
+
   const images = await uploadPropertyMediaToCloudinary(req.files?.images);
   const videos = await uploadPropertyMediaToCloudinary(req.files?.videos);
+
+  if (!images.length && !videos.length) {
+    return res.status(400).json({ message: 'Please upload at least one property image or video before listing this property.' });
+  }
+
   const property = await Property.create({
     title,
     description,
@@ -145,15 +151,25 @@ export const updateProperty = async (req, res) => {
     }
   });
   if (Object.keys(nextContact).length) updates.adminContact = nextContact;
+
+  let nextImages = property.images || [];
+  let nextVideos = property.videos || [];
+
   if (req.files) {
     if (req.files.images?.length) {
-      updates.images = await uploadPropertyMediaToCloudinary(req.files.images);
-      changes.push({ field: 'images', oldValue: property.images, newValue: updates.images });
+      nextImages = await uploadPropertyMediaToCloudinary(req.files.images);
+      updates.images = nextImages;
+      changes.push({ field: 'images', oldValue: property.images, newValue: nextImages });
     }
     if (req.files.videos?.length) {
-      updates.videos = await uploadPropertyMediaToCloudinary(req.files.videos);
-      changes.push({ field: 'videos', oldValue: property.videos, newValue: updates.videos });
+      nextVideos = await uploadPropertyMediaToCloudinary(req.files.videos);
+      updates.videos = nextVideos;
+      changes.push({ field: 'videos', oldValue: property.videos, newValue: nextVideos });
     }
+  }
+
+  if (!nextImages.length && !nextVideos.length) {
+    return res.status(400).json({ message: 'Please upload at least one property image or video before listing this property.' });
   }
 
   const updatedProperty = await Property.findByIdAndUpdate(req.params.id, updates, { new: true });
