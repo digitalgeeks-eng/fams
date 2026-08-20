@@ -265,7 +265,22 @@ export const getStudentPayments = async (req, res, next) => {
   try {
     const bookings = await Booking.find({ studentId: req.user._id });
     const bookingIds = bookings.map((booking) => booking._id);
-    const payments = await Payment.find({ bookingId: { $in: bookingIds } }).sort({ createdAt: -1 });
+
+    const payments = await Payment.find({ bookingId: { $in: bookingIds } })
+      .populate({
+        path: 'bookingId',
+        select: 'studentId propertyId paymentStatus bookingStatus transactionReference',
+        populate: [
+          { path: 'studentId', select: 'name email' },
+          {
+            path: 'propertyId',
+            select: 'title location price images type agentId',
+            populate: { path: 'agentId', select: 'name email' }
+          }
+        ]
+      })
+      .sort({ createdAt: -1 });
+
     res.json({ data: payments });
   } catch (error) {
     next(error);

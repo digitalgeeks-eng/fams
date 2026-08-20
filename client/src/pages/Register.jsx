@@ -117,11 +117,11 @@ const Register = () => {
 
       if (form.role === 'agent') {
         formData.append('phone', form.phone);
-        formData.append('company', form.company);
         formData.append('address', form.address);
         formData.append('yearsOfExperience', form.yearsOfExperience);
-        formData.append('licenseNumber', form.licenseNumber);
-        formData.append('bio', form.bio);
+        if (form.company.trim()) formData.append('company', form.company.trim());
+        if (form.licenseNumber.trim()) formData.append('licenseNumber', form.licenseNumber.trim());
+        if (form.bio.trim()) formData.append('bio', form.bio.trim());
 
         // Add images if captured
         if (idImage) {
@@ -331,11 +331,10 @@ const Register = () => {
               </label>
 
               <label className="block">
-                <span className="text-xs sm:text-sm font-medium text-slate-700">License Number *</span>
+                <span className="text-xs sm:text-sm font-medium text-slate-700">License Number</span>
                 <input
                   type="text"
                   name="licenseNumber"
-                  required
                   value={form.licenseNumber}
                   onChange={handleAgentChange}
                   className="mt-1.5 sm:mt-2 w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-slate-50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
@@ -408,7 +407,7 @@ const Register = () => {
 
             {/* License Upload */}
             <div className="rounded-xl sm:rounded-2xl border-2 border-dashed border-slate-300 p-4 sm:p-6">
-              <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4">License Photo *</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4">License Photo</p>
               {licenseImage ? (
                 <div className="space-y-2 sm:space-y-3">
                   <img src={licenseImage} alt="License" className="w-24 sm:w-32 h-24 sm:h-32 object-cover rounded-lg" />
@@ -455,7 +454,7 @@ const Register = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading || !idImage || !licenseImage}
+                disabled={loading || !idImage}
                 className="flex-1 rounded-2xl sm:rounded-3xl bg-primary px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white transition hover:bg-blue-600 disabled:bg-slate-400 disabled:cursor-not-allowed"
               >
                 {loading ? 'Registering...' : 'Complete Registration'}

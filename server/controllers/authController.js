@@ -43,11 +43,8 @@ export const register = async (req, res) => {
   if (normalizedRole === 'agent') {
     if (!phone?.trim()) return res.status(400).json({ message: 'Phone number is required for agents' });
     if (!address?.trim()) return res.status(400).json({ message: 'Address is required for agents' });
-    if (!licenseNumber?.trim()) return res.status(400).json({ message: 'License number is required for agents' });
-    if (!yearsOfExperience || yearsOfExperience < 0) return res.status(400).json({ message: 'Years of experience is required for agents' });
-    if (!req.files?.idImage || !req.files?.licenseImage) {
-      return res.status(400).json({ message: 'Both ID and License photos are required for agent verification' });
-    }
+    if (yearsOfExperience === undefined || yearsOfExperience === null || yearsOfExperience === '' || Number.isNaN(Number(yearsOfExperience)) || Number(yearsOfExperience) < 0) return res.status(400).json({ message: 'Years of experience is required for agents' });
+    if (!req.files?.idImage?.[0]) return res.status(400).json({ message: 'Passport or ID photo is required.' });
   }
 
   const existingUser = await User.findOne({ email: normalizedEmail });
@@ -67,17 +64,17 @@ export const register = async (req, res) => {
   // Add agent-specific fields
   if (normalizedRole === 'agent') {
     userData.phone = phone?.trim();
-    userData.company = company?.trim();
+    if (company?.trim()) userData.company = company.trim();
     userData.address = address?.trim();
     userData.yearsOfExperience = parseInt(yearsOfExperience);
-    userData.licenseNumber = licenseNumber?.trim();
-    userData.bio = bio?.trim();
-    const [idImage, licenseImage] = await Promise.all([
-      uploadBufferToCloudinary(req.files.idImage[0].buffer, { folder: 'fulafia-ams/agents/identity', resourceType: 'image' }),
-      uploadBufferToCloudinary(req.files.licenseImage[0].buffer, { folder: 'fulafia-ams/agents/licenses', resourceType: 'image' })
-    ]);
+    if (licenseNumber?.trim()) userData.licenseNumber = licenseNumber.trim();
+    if (bio?.trim()) userData.bio = bio.trim();
+    const idImage = await uploadBufferToCloudinary(req.files.idImage[0].buffer, { folder: 'fulafia-ams/agents/identity', resourceType: 'image' });
     userData.idImage = idImage.secure_url;
-    userData.licenseImage = licenseImage.secure_url;
+    if (req.files.licenseImage?.[0]) {
+      const licenseImage = await uploadBufferToCloudinary(req.files.licenseImage[0].buffer, { folder: 'fulafia-ams/agents/licenses', resourceType: 'image' });
+      userData.licenseImage = licenseImage.secure_url;
+    }
   }
 
   const user = await User.create({ ...userData, authProvider: 'local' });
