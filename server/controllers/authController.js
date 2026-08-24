@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import User from '../models/User.js';
 import { validateBankDetails, validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { OAuth2Client } from 'google-auth-library';
+import { sendEmail } from '../services/emailService.js';
 
 dotenv.config();
 
@@ -133,6 +135,56 @@ export const login = async (req, res) => {
     message: 'Login successful',
     data: { user: { id: user._id, name: user.name, email: user.email, role: user.role, verificationStatus: user.verificationStatus }, token }
   });
+};
+
+export const forgotPassword = async (req, res) => {
+  const normalizedEmail = req.body.email?.trim().toLowerCase();
+  const response = { message: 'If an account exists for that email, a password reset link has been sent.' };
+
+  if (!normalizedEmail || !validateEmail(normalizedEmail)) return res.json(response);
+
+  const user = await User.findOne({ email: normalizedEmail }).select('+passwordResetToken +passwordResetExpires');
+  if (!user) return res.json(response);
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  user.passwordResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+
+  const clientUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+  const resetUrl = `${clientUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
+  await sendEmail({
+    to: user.email,
+    subject: 'Reset your FULAFIA AMS password',
+    text: `Use this link to reset your password: ${resetUrl}\n\nThis link expires in 1 hour. If you did not request this, you can ignore this email.`,
+    html: `<p>Use the link below to reset your FULAFIA AMS password:</p><p><a href="${resetUrl}">Reset password</a></p><p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>`
+  });
+
+  return res.json(response);
+};
+
+export const resetPassword = async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+  if (!token || !validatePasswordStrength(password)) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: new Date() }
+  }).select('+password +passwordResetToken +passwordResetExpires');
+
+  if (!user) return res.status(400).json({ message: 'This password reset link is invalid or has expired.' });
+
+  user.password = await bcrypt.hash(password, 10);
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  user.authProvider = user.googleId ? 'both' : 'local';
+  await user.save();
+
+  return res.json({ message: 'Password reset successful. You can now log in.' });
 };
 
 export const googleLogin = async (req, res) => {

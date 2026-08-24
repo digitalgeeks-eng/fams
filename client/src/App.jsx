@@ -3,6 +3,8 @@ import { useAuth } from './hooks/useAuth.jsx';
 import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import Listings from './pages/Listings.jsx';
 import PropertyDetails from './pages/PropertyDetails.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
@@ -43,6 +45,8 @@ const App = () => (
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/properties/:id" element={<PropertyDetails />} />
           <Route path="/student" element={<PrivateRoute role="student"><StudentDashboard /></PrivateRoute>} />

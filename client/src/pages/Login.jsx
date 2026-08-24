@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { GoogleLogin } from '@react-oauth/google';
 
@@ -80,6 +80,10 @@ const Login = () => {
               className="mt-1.5 sm:mt-2 w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-slate-50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
           </label>
+          <div className="-mt-1 flex items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 px-3 py-2.5 sm:px-4 sm:py-3">
+            <span className="text-xs text-slate-600 sm:text-sm">Need help signing in?</span>
+            <Link to="/forgot-password" className="shrink-0 text-xs font-semibold text-primary hover:text-blue-700 sm:text-sm">Recover password</Link>
+          </div>
           <button
             type="submit"
             disabled={loading}
