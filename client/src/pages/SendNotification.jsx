@@ -15,9 +15,11 @@ const SendNotification = () => {
     const fetchUsers = async () => {
       try {
         const response = await api.get('/admin/users');
-        setUsers(response.data.data);
+        const nextUsers = Array.isArray(response.data?.data?.users) ? response.data.data.users : [];
+        setUsers(nextUsers);
       } catch (err) {
         console.error(err);
+        setStatus(err.response?.data?.message || 'Unable to load users. Please try again.');
       } finally {
         setLoading(false);
       }

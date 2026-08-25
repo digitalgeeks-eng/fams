@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext.jsx';
 
 const Notifications = () => {
   const { user } = useContext(AuthContext);
+  const isSuperAdmin = user?.role === 'admin' && (user.adminRole || 'super_admin') === 'super_admin';
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -16,9 +17,10 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const endpoint = user?.role === 'admin' ? '/communications/notifications/admin/all' : '/communications/notifications';
+      const endpoint = isSuperAdmin ? '/communications/notifications/admin/all' : '/communications/notifications';
       const response = await api.get(endpoint);
-      setNotifications(response.data.data || []);
+      const nextNotifications = Array.isArray(response.data?.data) ? response.data.data : [];
+      setNotifications(nextNotifications);
       setError('');
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -35,7 +37,7 @@ const Notifications = () => {
     } else {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isSuperAdmin]);
 
   const handleEdit = (notification) => {
     setEditingId(notification._id);
@@ -83,7 +85,7 @@ const Notifications = () => {
       <div className="rounded-3xl bg-white p-6 shadow-xl">
         <h1 className="text-2xl font-semibold">Notifications</h1>
         <p className="mt-2 text-slate-600">
-          {user?.role === 'admin' ? 'Manage all notifications' : 'Review alerts about bookings, payments, and admin actions.'}
+          {isSuperAdmin ? 'Manage all notifications' : 'Review alerts about bookings, payments, and admin actions.'}
         </p>
         {user && <p className="mt-2 text-xs text-slate-500">Current Role: <span className="font-semibold uppercase">{user.role}</span></p>}
       </div>
@@ -140,14 +142,14 @@ const Notifications = () => {
                   <div className="flex-1">
                     <h2 className="text-lg font-semibold text-slate-900">{notification.title}</h2>
                     <p className="mt-1 text-sm text-slate-500">{new Date(notification.createdAt).toLocaleString()}</p>
-                    {user?.role === 'admin' && notification.userId && (
+                    {isSuperAdmin && notification.userId && (
                       <p className="mt-1 text-xs text-slate-400">Sent to: {notification.userId.name}</p>
                     )}
                   </div>
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700 whitespace-nowrap">{notification.type}</span>
                 </div>
                 <p className="mt-4 text-slate-600 whitespace-pre-line">{notification.message}</p>
-                {user?.role === 'admin' && (
+                {isSuperAdmin && (
                   <div className="mt-4 flex gap-3">
                     <button
                       onClick={() => handleEdit(notification)}

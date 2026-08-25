@@ -53,6 +53,7 @@ const Navbar = () => {
               <MenuLink to="/admin/payments" label="Payments" />
               {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/notifications" label="Send Notification" />}
+              <MenuLink to="/notifications" label="Notifications" />
             </>
           )}
 
@@ -123,6 +124,7 @@ const Navbar = () => {
               <MenuLink to="/admin/payments" label="Payments" />
               {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/notifications" label="Send Notification" />}
+              <MenuLink to="/notifications" label="Notifications" />
               <MenuLink to="/admin" label="Dashboard" />
             </>
           )}
