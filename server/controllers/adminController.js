@@ -268,7 +268,7 @@ export const createLocationAdmin = async (req, res) => {
   }
   const normalizedEmail = email.trim().toLowerCase();
   if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ message: 'Email already registered' });
-  const user = await User.create({ name: name.trim(), email: normalizedEmail, phone: phone.trim(), password: await bcrypt.hash(password, 10), role: 'admin', adminRole: 'location_admin', assignedLocation: normalizedLocation, verificationStatus: 'verified', authProvider: 'local' });
+  const user = await User.create({ name: name.trim(), email: normalizedEmail, phone: phone.trim(), password: await bcrypt.hash(password, 10), role: 'admin', adminRole: 'location_admin', assignedLocation: normalizedLocation, adminSource: 'created_as_admin', verificationStatus: 'verified', authProvider: 'local' });
   await recordAdminActivity(req.user, 'admin_created', `Location Admin created for ${normalizedLocation}.`, { propertyLocation: normalizedLocation });
   res.status(201).json({ message: 'Location Admin created successfully.', data: { user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, adminRole: user.adminRole, assignedLocation: user.assignedLocation, status: user.status, createdAt: user.createdAt } } });
 };
@@ -276,6 +276,52 @@ export const createLocationAdmin = async (req, res) => {
 export const listAdmins = async (req, res) => {
   const admins = await User.find({ role: 'admin' }).select('-password -passwordResetToken -passwordResetExpires').sort({ createdAt: -1 });
   res.json({ data: admins });
+};
+
+export const searchUsersForPromotion = async (req, res) => {
+  const search = String(req.query.search || '').trim();
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 25);
+  const filter = {};
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { phone: { $regex: search, $options: 'i' } }
+    ];
+  }
+  const [users, total] = await Promise.all([
+    User.find(filter).select('_id name email phone role adminRole assignedLocation status createdAt').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    User.countDocuments(filter)
+  ]);
+  res.json({ data: { users, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } } });
+};
+
+export const promoteUserToLocationAdmin = async (req, res) => {
+  const assignedLocation = normalizeAdminLocation(req.body.assignedLocation);
+  if (!assignedLocation) return res.status(400).json({ message: 'A valid assigned location is required.' });
+
+  const target = await User.findById(req.params.id).select('+password');
+  if (!target) return res.status(404).json({ message: 'User not found' });
+  if (target.role === 'admin' && (target.adminRole || 'super_admin') === 'super_admin') return res.status(409).json({ message: 'This user is already a Super Admin.' });
+  if (target.role === 'admin' && target.adminRole === 'location_admin') {
+    const oldLocation = target.assignedLocation;
+    target.assignedLocation = assignedLocation;
+    await target.save();
+    await recordAdminActivity(req.user, 'admin_location_changed', `${target.name}'s location changed from ${oldLocation || 'none'} to ${assignedLocation}.`, { propertyLocation: assignedLocation });
+    return res.json({ message: `${target.name}'s Location Admin assignment was changed to ${assignedLocation}.`, data: target });
+  }
+
+  const previousRole = target.role;
+  const updated = await User.findOneAndUpdate(
+    { _id: target._id, role: { $ne: 'admin' } },
+    { $set: { role: 'admin', adminRole: 'location_admin', assignedLocation, adminSource: 'promoted_existing_user' } },
+    { new: true, runValidators: true }
+  ).select('-password -passwordResetToken -passwordResetExpires');
+  if (!updated) return res.status(409).json({ message: 'This user was already changed. Refresh and try again.' });
+
+  await recordAdminActivity(req.user, 'user_promoted_to_location_admin', `${updated.name} was promoted from ${previousRole} to Location Admin for ${assignedLocation}.`, { propertyLocation: assignedLocation });
+  res.json({ message: `${updated.name} has been promoted to Location Admin for ${assignedLocation}.`, data: updated });
 };
 
 export const updateAdminScope = async (req, res) => {
@@ -288,6 +334,7 @@ export const updateAdminScope = async (req, res) => {
   const oldLocation = admin.assignedLocation;
   admin.adminRole = 'location_admin';
   admin.assignedLocation = assignedLocation;
+  admin.adminSource = admin.adminSource || 'created_as_admin';
   await admin.save();
   await recordAdminActivity(req.user, 'admin_location_changed', `Administrator location changed from ${oldLocation || 'none'} to ${assignedLocation}.`, { propertyLocation: assignedLocation });
   res.json({ message: 'Administrator location updated successfully.', data: admin });

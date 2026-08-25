@@ -14,7 +14,7 @@ import {
   updateUserRole,
   deleteUser
 } from '../controllers/adminController.js';
-import { createLocationAdmin, listAdmins, updateAdminScope, listAdminActivities } from '../controllers/adminController.js';
+import { createLocationAdmin, listAdmins, searchUsersForPromotion, promoteUserToLocationAdmin, updateAdminScope, listAdminActivities } from '../controllers/adminController.js';
 import { getUserAdmin, updateUserAdmin, updateUserStatus } from '../controllers/adminController.js';
 import { getDeletedProperties } from '../controllers/propertyController.js';
 import { getAdminPayments, verifyPaymentAdmin } from '../controllers/paymentController.js';
@@ -24,6 +24,8 @@ const router = express.Router();
 router.use(protect, authorizeRoles('admin'));
 router.post('/admins', authorizeAdminRoles('super_admin'), asyncHandler(createLocationAdmin));
 router.get('/admins', authorizeAdminRoles('super_admin'), asyncHandler(listAdmins));
+router.get('/users/search', authorizeAdminRoles('super_admin'), asyncHandler(searchUsersForPromotion));
+router.post('/users/:id/promote', authorizeAdminRoles('super_admin'), asyncHandler(promoteUserToLocationAdmin));
 router.patch('/admins/:id/scope', authorizeAdminRoles('super_admin'), asyncHandler(updateAdminScope));
 router.get('/activities', authorizeAdminRoles('super_admin'), asyncHandler(listAdminActivities));
 router.get('/analytics', asyncHandler(getAnalytics));

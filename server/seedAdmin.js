@@ -27,6 +27,7 @@ const run = async () => {
       password: hashed,
       role: 'admin',
       adminRole: 'super_admin',
+      adminSource: 'created_as_admin',
       verificationStatus: 'verified'
     });
     console.log('Admin created successfully.');
