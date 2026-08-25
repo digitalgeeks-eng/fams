@@ -21,12 +21,15 @@ export const getAnalytics = async (req, res) => {
   const verifiedAgents = isSuperAdmin(req.user) ? await User.countDocuments({ role: 'agent', verificationStatus: 'verified' }) : await User.countDocuments({ _id: { $in: agentIds }, role: 'agent', verificationStatus: 'verified' });
   const pendingAgents = isSuperAdmin(req.user) ? await User.countDocuments({ role: 'agent', verificationStatus: 'pending' }) : await User.countDocuments({ _id: { $in: agentIds }, role: 'agent', verificationStatus: 'pending' });
   const activeProperties = await Property.countDocuments({ ...propertyScope, approvalStatus: 'approved', isDeleted: { $ne: true } });
+  const pendingApprovals = await Property.countDocuments({ ...propertyScope, approvalStatus: 'pending', isDeleted: { $ne: true } });
+  const unavailableProperties = await Property.countDocuments({ ...propertyScope, isDeleted: { $ne: true }, $or: [{ isUnavailable: true }, { availabilityStatus: 'not_available' }] });
+  const availableProperties = Math.max(activeProperties - unavailableProperties, 0);
   const totalBookings = await Booking.countDocuments({ propertyId: { $in: propertyIds } });
   const totalPayments = await Payment.countDocuments({ verificationStatus: 'verified', bookingId: { $in: bookingIds } });
-  const pendingComplaints = await Complaint.countDocuments({ status: 'pending' });
+  const pendingComplaints = isSuperAdmin(req.user) ? await Complaint.countDocuments({ status: 'pending' }) : 0;
 
   res.json({
-    data: { totalStudents, verifiedAgents, pendingAgents, activeProperties, totalBookings, totalPayments, pendingComplaints, adminRole: req.user.adminRole || 'super_admin', assignedLocation: req.user.assignedLocation || null }
+    data: { totalStudents, verifiedAgents, pendingAgents, activeProperties, pendingApprovals, availableProperties, unavailableProperties, totalBookings, totalPayments, pendingComplaints, adminRole: req.user.adminRole || 'super_admin', assignedLocation: req.user.assignedLocation || null }
   });
 };
 

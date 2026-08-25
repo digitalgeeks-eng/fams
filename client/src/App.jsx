@@ -45,6 +45,20 @@ const SuperAdminRoute = ({ children }) => {
   return children;
 };
 
+const LocationAdminPropertyRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingSpinner />;
+  if (!user || user.role !== 'admin') return <Navigate to="/login" replace />;
+  return children;
+};
+
+const NonLocationAdminComplaintsRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingSpinner />;
+  if (!user || (user.role === 'admin' && user.adminRole === 'location_admin')) return <Navigate to="/admin" replace />;
+  return children;
+};
+
 const App = () => (
   <BrowserRouter>
     <div className="min-h-screen bg-background text-slate-900">
@@ -63,7 +77,7 @@ const App = () => (
           <Route path="/student/bookings" element={<PrivateRoute role="student"><MyBookings /></PrivateRoute>} />
           <Route path="/student/payments" element={<PrivateRoute role="student"><Payments /></PrivateRoute>} />
           <Route path="/student/complaints" element={<PrivateRoute role="student"><Complaints /></PrivateRoute>} />
-          <Route path="/complaints" element={<PrivateRoute><Complaints /></PrivateRoute>} />
+          <Route path="/complaints" element={<NonLocationAdminComplaintsRoute><Complaints /></NonLocationAdminComplaintsRoute>} />
           <Route path="/student/recommendations" element={<PrivateRoute role="student"><Recommendations /></PrivateRoute>} />
           <Route path="/agent" element={<PrivateRoute role="agent"><AgentDashboard /></PrivateRoute>} />
           <Route path="/agent/profile" element={<PrivateRoute role="agent"><AgentProfile /></PrivateRoute>} />
@@ -73,13 +87,13 @@ const App = () => (
           <Route path="/agent/booking-requests" element={<PrivateRoute role="agent"><BookingRequests /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>} />
           <Route path="/admin/manage" element={<SuperAdminRoute><AdminManagement /></SuperAdminRoute>} />
-          <Route path="/admin/agents" element={<PrivateRoute role="admin"><AgentVerification /></PrivateRoute>} />
-          <Route path="/admin/properties" element={<PrivateRoute role="admin"><PropertyApproval /></PrivateRoute>} />
-          <Route path="/admin/payments" element={<PrivateRoute role="admin"><PaymentVerification /></PrivateRoute>} />
-          <Route path="/admin/bookings" element={<PrivateRoute role="admin"><AdminBookings /></PrivateRoute>} />
-          <Route path="/admin/complaints" element={<PrivateRoute role="admin"><ComplaintManagement /></PrivateRoute>} />
-          <Route path="/admin/users" element={<PrivateRoute role="admin"><UserManagement /></PrivateRoute>} />
-          <Route path="/admin/notifications" element={<PrivateRoute role="admin"><SendNotification /></PrivateRoute>} />
+          <Route path="/admin/agents" element={<SuperAdminRoute><AgentVerification /></SuperAdminRoute>} />
+          <Route path="/admin/properties" element={<LocationAdminPropertyRoute><PropertyApproval /></LocationAdminPropertyRoute>} />
+          <Route path="/admin/payments" element={<LocationAdminPropertyRoute><PaymentVerification /></LocationAdminPropertyRoute>} />
+          <Route path="/admin/bookings" element={<LocationAdminPropertyRoute><AdminBookings /></LocationAdminPropertyRoute>} />
+          <Route path="/admin/complaints" element={<SuperAdminRoute><ComplaintManagement /></SuperAdminRoute>} />
+          <Route path="/admin/users" element={<SuperAdminRoute><UserManagement /></SuperAdminRoute>} />
+          <Route path="/admin/notifications" element={<SuperAdminRoute><SendNotification /></SuperAdminRoute>} />
           <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
         </Routes>
       </main>

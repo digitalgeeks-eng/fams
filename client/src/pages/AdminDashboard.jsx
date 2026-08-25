@@ -43,7 +43,7 @@ const AdminDashboard = () => {
         <p className="mt-2 text-slate-600">{user?.adminRole === 'location_admin' ? `Manage ${user.assignedLocation} properties and approvals.` : 'Manage agents, property approvals, payments, complaints, and users from one place.'}</p>
         {user?.adminRole !== 'location_admin' && <Link to="/admin/manage" className="mt-4 inline-flex rounded-2xl bg-secondary px-4 py-2 font-semibold text-white hover:bg-slate-900">Admin Management</Link>}
       </div>
-      <div className="grid gap-6 md:grid-cols-3">
+      {user?.adminRole !== 'location_admin' && <div className="grid gap-6 md:grid-cols-3">
         <Link to="/admin/agents" className="rounded-3xl bg-primary text-white p-6 shadow-xl hover:bg-slate-900">
           <h3 className="text-sm uppercase">Verify agents</h3>
           <p className="mt-4 text-2xl font-bold">{analytics.verifiedAgents}</p>
@@ -56,8 +56,14 @@ const AdminDashboard = () => {
           <h3 className="text-sm uppercase">Verify payments</h3>
           <p className="mt-4 text-2xl font-bold">{analytics.totalPayments}</p>
         </Link>
-      </div>
-      <div className="grid gap-6 md:grid-cols-3">
+      </div>}
+      {user?.adminRole === 'location_admin' ? <div className="grid gap-6 md:grid-cols-3">
+        <Link to="/admin/properties" className="rounded-3xl bg-primary p-6 text-white shadow-xl hover:bg-slate-900"><h3 className="text-sm uppercase">Pending approvals</h3><p className="mt-4 text-4xl font-bold">{analytics.pendingApprovals}</p></Link>
+        <Link to="/admin/properties" className="rounded-3xl bg-white p-6 shadow-xl hover:shadow-2xl"><h3 className="text-sm uppercase text-slate-500">Approved listings</h3><p className="mt-4 text-4xl font-bold">{analytics.activeProperties}</p></Link>
+        <Link to="/admin/payments" className="rounded-3xl bg-white p-6 shadow-xl hover:shadow-2xl"><h3 className="text-sm uppercase text-slate-500">Payment verification</h3><p className="mt-4 text-4xl font-bold">{analytics.totalPayments}</p></Link>
+        <div className="rounded-3xl bg-white p-6 shadow-xl"><h3 className="text-sm uppercase text-slate-500">Available</h3><p className="mt-4 text-4xl font-bold">{analytics.availableProperties}</p></div>
+        <div className="rounded-3xl bg-white p-6 shadow-xl"><h3 className="text-sm uppercase text-slate-500">Not available</h3><p className="mt-4 text-4xl font-bold">{analytics.unavailableProperties}</p></div>
+      </div> : <div className="grid gap-6 md:grid-cols-3">
         <Link to="/admin/complaints" className="rounded-3xl bg-white p-6 shadow-xl hover:shadow-2xl">
           <h3 className="text-sm uppercase text-slate-500">Pending complaints</h3>
           <p className="mt-4 text-4xl font-bold">{analytics.pendingComplaints}</p>
@@ -70,8 +76,8 @@ const AdminDashboard = () => {
           <h3 className="text-sm uppercase text-slate-500">Agents pending</h3>
           <p className="mt-4 text-4xl font-bold">{analytics.pendingAgents}</p>
         </div>
-      </div>
-      <div className="grid gap-6 md:grid-cols-3">
+      </div>}
+      {user?.adminRole !== 'location_admin' && <div className="grid gap-6 md:grid-cols-3">
         <div className="rounded-3xl bg-white p-6 shadow-xl">
           <h3 className="text-sm uppercase text-slate-500">Students</h3>
           <p className="mt-4 text-4xl font-bold">{analytics.totalStudents}</p>
@@ -84,8 +90,8 @@ const AdminDashboard = () => {
           <h3 className="text-sm uppercase text-slate-500">Total bookings</h3>
           <p className="mt-4 text-4xl font-bold">{analytics.totalBookings}</p>
         </Link>
-      </div>
-      <div className="grid gap-6 md:grid-cols-3">
+      </div>}
+      {user?.adminRole !== 'location_admin' && <div className="grid gap-6 md:grid-cols-3">
         <div className="rounded-3xl bg-white p-6 shadow-xl">
           <h3 className="text-sm uppercase text-slate-500">Verified payments</h3>
           <p className="mt-4 text-4xl font-bold">{analytics.totalPayments}</p>
@@ -94,7 +100,7 @@ const AdminDashboard = () => {
           <h3 className="text-sm uppercase text-slate-500">Pending complaints</h3>
           <p className="mt-4 text-4xl font-bold">{analytics.pendingComplaints}</p>
         </div>
-      </div>
+      </div>}
     </section>
   );
 };

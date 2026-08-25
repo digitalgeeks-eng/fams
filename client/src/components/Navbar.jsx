@@ -47,13 +47,12 @@ const Navbar = () => {
           {user && user.role === 'admin' && (
             <>
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/manage" label="Admin Management" />}
-              <MenuLink to="/admin/agents" label="Agents" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/agents" label="Agents" />}
               <MenuLink to="/admin/properties" label="Properties" />
-              <MenuLink to="/admin/users" label="Users" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/users" label="Users" />}
               <MenuLink to="/admin/payments" label="Payments" />
-              <MenuLink to="/complaints" label="Complaints" />
-              <MenuLink to="/admin/notifications" label="Send Notification" />
-              <MenuLink to="/notifications" label="Notifications" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/notifications" label="Send Notification" />}
             </>
           )}
 
@@ -118,13 +117,12 @@ const Navbar = () => {
           {user && user.role === 'admin' && (
             <>
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/manage" label="Admin Management" />}
-              <MenuLink to="/admin/agents" label="Agents" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/agents" label="Agents" />}
               <MenuLink to="/admin/properties" label="Properties" />
-              <MenuLink to="/admin/users" label="Users" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/users" label="Users" />}
               <MenuLink to="/admin/payments" label="Payments" />
-              <MenuLink to="/complaints" label="Complaints" />
-              <MenuLink to="/admin/notifications" label="Send Notification" />
-              <MenuLink to="/notifications" label="Notifications" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/notifications" label="Send Notification" />}
               <MenuLink to="/admin" label="Dashboard" />
             </>
           )}
