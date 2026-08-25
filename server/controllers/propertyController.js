@@ -4,6 +4,7 @@ import Payment from '../models/Payment.js';
 import PropertyEditHistory from '../models/PropertyEditHistory.js';
 import { updateRecommendationData } from '../services/recommendationService.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
+import { normalizePropertyLocation } from '../utils/locations.js';
 
 const uploadPropertyMediaToCloudinary = async (files = []) => Promise.all(files.map(async (file) => {
   const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
@@ -33,8 +34,17 @@ export const listProperties = async (req, res) => {
       { visibleUntil: { $gt: new Date() } }
     ]
   };
-  if (search) filter.title = { $regex: search, $options: 'i' };
-  if (location) filter.location = { $regex: location, $options: 'i' };
+  if (search) filter.$and = [
+    { $or: [
+      { title: { $regex: search, $options: 'i' } },
+      { location: { $regex: search, $options: 'i' } }
+    ] }
+  ];
+  if (location) {
+    filter.location = location.toLowerCase() === 'other'
+      ? { $nin: ['Gandu', 'Maraba', 'Mararaba', 'Gimare', 'Bukan Kota', 'Bukan Koto', 'Akunza', 'Tudun Kauri'] }
+      : { $regex: location, $options: 'i' };
+  }
   if (type) filter.type = type;
   if (priceRange) {
     const [minPrice, maxPrice] = priceRange.split('-').map(Number);
@@ -68,6 +78,7 @@ export const createProperty = async (req, res) => {
     title,
     description,
     location,
+    customLocation,
     type,
     price,
     visibleUntil,
@@ -80,8 +91,12 @@ export const createProperty = async (req, res) => {
     adminContactTwitter,
     adminContactLinkedin
   } = req.body;
-  if (!title || !description || !location || !type || !price) {
+  const savedLocation = normalizePropertyLocation({ location, customLocation });
+  if (!title || !description || !savedLocation || !type || !price) {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
+  }
+  if (String(location).trim().toLowerCase() === 'other' && !String(customLocation || '').trim()) {
+    return res.status(400).json({ message: 'Please enter the location.' });
   }
 
   const images = await uploadPropertyMediaToCloudinary(req.files?.images);
@@ -94,7 +109,7 @@ export const createProperty = async (req, res) => {
   const property = await Property.create({
     title,
     description,
-    location,
+    location: savedLocation,
     type,
     price,
     images,
@@ -127,9 +142,20 @@ export const updateProperty = async (req, res) => {
   const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
   const updates = { approvalStatus: 'pending' };
   const changes = [];
+  if (req.body.location !== undefined && String(req.body.location).trim().toLowerCase() === 'other' && !String(req.body.customLocation || '').trim()) {
+    return res.status(400).json({ message: 'Please enter the location.' });
+  }
+  if (req.body.location !== undefined && !normalizePropertyLocation({ location: req.body.location, customLocation: req.body.customLocation })) {
+    return res.status(400).json({ message: 'Please select a valid location.' });
+  }
   editableFields.forEach((field) => {
     if (req.body[field] === undefined) return;
-    const newValue = field === 'visibleUntil' ? (req.body[field] ? new Date(req.body[field]) : undefined) : req.body[field];
+    const newValue = field === 'visibleUntil'
+      ? (req.body[field] ? new Date(req.body[field]) : undefined)
+      : field === 'location'
+        ? normalizePropertyLocation({ location: req.body[field], customLocation: req.body.customLocation })
+        : req.body[field];
+    if (field === 'location' && !newValue) return;
     const oldValue = property[field];
     if (String(oldValue ?? '') !== String(newValue ?? '')) {
       changes.push({ field, oldValue, newValue });

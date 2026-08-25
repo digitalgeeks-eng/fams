@@ -1,8 +1,14 @@
 export const LOCATIONS = [
   'Gandu',
-  'Mararaba',
+  'Maraba',
   'Gimare',
-  'Bukan Koto',
+  'Bukan Kota',
   'Akunza',
-  'Tudun Kauri'
+  'Tudun Kauri',
+  'Other'
 ];
+
+export const LEGACY_LOCATION_ALIASES = {
+  Mararaba: 'Maraba',
+  'Bukan Koto': 'Bukan Kota'
+};

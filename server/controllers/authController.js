@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import User from '../models/User.js';
+import EmailVerification from '../models/EmailVerification.js';
 import { validateBankDetails, validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { OAuth2Client } from 'google-auth-library';
@@ -57,6 +58,15 @@ export const register = async (req, res) => {
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) return res.status(409).json({ message: 'Email already registered' });
 
+  const emailVerification = await EmailVerification.findOne({
+    email: normalizedEmail,
+    verifiedAt: { $ne: null },
+    expiresAt: { $gt: new Date() }
+  });
+  if (!emailVerification) {
+    return res.status(403).json({ message: 'Please verify your email address before completing registration.' });
+  }
+
   const hashedPassword = await bcrypt.hash(password, 10);
   const verificationStatus = normalizedRole === 'agent' ? 'pending' : 'verified';
 
@@ -93,6 +103,7 @@ export const register = async (req, res) => {
   }
 
   const user = await User.create({ ...userData, authProvider: 'local' });
+  await EmailVerification.deleteOne({ _id: emailVerification._id });
   const token = generateToken(user._id);
 
   res.status(201).json({
@@ -111,6 +122,69 @@ export const register = async (req, res) => {
       token
     }
   });
+};
+
+export const sendRegistrationVerification = async (req, res) => {
+  const normalizedEmail = req.body.email?.trim().toLowerCase();
+  if (!normalizedEmail || !validateEmail(normalizedEmail)) {
+    return res.status(400).json({ message: 'Please enter a valid email address.' });
+  }
+
+  const response = { message: 'If this email can be used, a verification link has been sent.' };
+  const existingUser = await User.exists({ email: normalizedEmail });
+  if (existingUser) return res.json(response);
+
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  await EmailVerification.deleteMany({ email: normalizedEmail });
+  await EmailVerification.create({
+    email: normalizedEmail,
+    verificationToken: crypto.createHash('sha256').update(verificationToken).digest('hex'),
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+  });
+
+  const clientUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+  const verificationUrl = `${clientUrl.replace(/\/$/, '')}/verify-email/${verificationToken}`;
+  try {
+    await sendEmail({
+      to: normalizedEmail,
+      subject: 'Verify your FULAFIA AMS email',
+      text: `Verify your email address to continue registration: ${verificationUrl}\n\nThis link expires in 30 minutes.`,
+      html: `<p>Verify your email address to continue registration:</p><p><a href="${verificationUrl}">Verify email address</a></p><p>This link expires in 30 minutes.</p>`
+    });
+  } catch (error) {
+    await EmailVerification.deleteOne({ email: normalizedEmail });
+    throw error;
+  }
+
+  return res.json(response);
+};
+
+export const verifyEmail = async (req, res) => {
+  const hashedToken = crypto.createHash('sha256').update(req.params.token || '').digest('hex');
+  const verification = await EmailVerification.findOne({
+    verificationToken: hashedToken,
+    expiresAt: { $gt: new Date() },
+    verifiedAt: null
+  }).select('+verificationToken');
+
+  if (!verification) return res.status(400).json({ message: 'This verification link is invalid or has expired.' });
+
+  verification.verifiedAt = new Date();
+  verification.verificationToken = undefined;
+  await verification.save({ validateBeforeSave: false });
+  return res.json({ message: 'Email verified successfully.', data: { email: verification.email } });
+};
+
+export const registrationVerificationStatus = async (req, res) => {
+  const normalizedEmail = req.query.email?.trim().toLowerCase();
+  if (!normalizedEmail || !validateEmail(normalizedEmail)) return res.json({ data: { verified: false } });
+
+  const verification = await EmailVerification.findOne({
+    email: normalizedEmail,
+    verifiedAt: { $ne: null },
+    expiresAt: { $gt: new Date() }
+  });
+  return res.json({ data: { verified: Boolean(verification) } });
 };
 
 export const login = async (req, res) => {

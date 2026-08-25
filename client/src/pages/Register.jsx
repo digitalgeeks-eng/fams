@@ -27,6 +27,9 @@ const Register = () => {
   const [licenseImage, setLicenseImage] = useState(null);
   const [cameraMode, setCameraMode] = useState(null); // 'id', 'license', or null
   const [error, setError] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { loginWithGoogle } = useAuth();
@@ -37,6 +40,11 @@ const Register = () => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
     setError('');
+    if (name === 'email') {
+      setEmailVerificationSent(false);
+      setEmailVerified(false);
+      setVerificationMessage('');
+    }
   };
 
   const handleAgentChange = (e) => {
@@ -98,11 +106,43 @@ const Register = () => {
       setError('Please fill in all required fields');
       return;
     }
-    
-    if (form.role === 'agent') {
-      setStep(2);
-    } else {
-      submitRegistration();
+
+    try {
+      setLoading(true);
+      setError('');
+      if (!emailVerificationSent) {
+        await api.post('/auth/send-registration-verification', { email: form.email });
+        setEmailVerificationSent(true);
+        setVerificationMessage('Verification link sent. Open it in your email, then return here to continue.');
+        return;
+      }
+
+      const response = await api.get('/auth/registration-verification-status', { params: { email: form.email } });
+      if (!response.data?.data?.verified) {
+        setError('Please open the verification link in your email before continuing.');
+        return;
+      }
+
+      setEmailVerified(true);
+      if (form.role === 'agent') setStep(2);
+      else await submitRegistration();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Unable to verify your email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      await api.post('/auth/send-registration-verification', { email: form.email });
+      setVerificationMessage('A fresh verification link has been sent. It expires in 30 minutes.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to resend the verification link.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -192,6 +232,14 @@ const Register = () => {
             {error}
           </div>
         )}
+        {verificationMessage && (
+          <div className="mb-4 rounded-2xl bg-emerald-50 px-3 py-3 text-xs text-emerald-700 ring-1 ring-emerald-200 sm:mb-6 sm:px-4 sm:text-sm">
+            <p>{verificationMessage}</p>
+            {emailVerificationSent && !emailVerified && (
+              <button type="button" onClick={resendVerification} disabled={loading} className="mt-2 font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-950">Resend verification link</button>
+            )}
+          </div>
+        )}
 
         {/* STEP 1: Basic Registration */}
         {step === 1 && (
@@ -258,7 +306,7 @@ const Register = () => {
               type="submit"
               className="inline-flex w-full items-center justify-center rounded-2xl sm:rounded-3xl bg-primary px-5 py-2.5 sm:py-3 text-sm sm:text-base font-semibold text-white transition hover:bg-blue-600 mt-2 sm:mt-0"
             >
-              {form.role === 'agent' ? 'Continue to Profile Details' : 'Register'}
+              {loading ? 'Checking email...' : !emailVerificationSent ? 'Verify email to continue' : form.role === 'agent' ? 'I have verified - continue' : 'I have verified - register'}
             </button>
           </form>
         )}

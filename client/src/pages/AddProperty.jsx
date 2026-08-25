@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api.js';
-import { LOCATIONS } from '../constants/locations.js';
+import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
 
 const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'];
 
@@ -12,6 +12,7 @@ const AddProperty = () => {
     title: '',
     description: '',
     location: '',
+    customLocation: '',
     type: '',
     price: '',
     visibleUntil: '',
@@ -36,11 +37,14 @@ const AddProperty = () => {
         const response = await api.get(`/properties/${id}`);
         const property = response.data.data;
         setExistingMediaCount((property.images?.length || 0) + (property.videos?.length || 0));
+        const displayedLocation = LEGACY_LOCATION_ALIASES[property.location] || property.location || '';
+        const isPredefined = LOCATIONS.includes(displayedLocation) && displayedLocation !== 'Other';
         setForm((current) => ({
           ...current,
           title: property.title || '',
           description: property.description || '',
-          location: property.location || '',
+          location: isPredefined ? displayedLocation : 'Other',
+          customLocation: isPredefined ? '' : property.location || '',
           type: property.type || '',
           price: property.price || '',
           visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : ''
@@ -66,6 +70,7 @@ const AddProperty = () => {
     data.append('title', form.title);
     data.append('description', form.description);
     data.append('location', form.location);
+    if (form.location === 'Other') data.append('customLocation', form.customLocation.trim());
     data.append('type', form.type);
     data.append('price', form.price);
     if (form.visibleUntil) data.append('visibleUntil', form.visibleUntil);
@@ -82,7 +87,7 @@ const AddProperty = () => {
     try {
       await api[isEditMode ? 'put' : 'post'](isEditMode ? `/properties/${id}` : '/properties', data);
       setMessage(isEditMode ? 'Property updated successfully and sent for approval' : 'Property created successfully and awaiting admin approval');
-      setForm({ title: '', description: '', location: '', type: '', price: '', visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '', adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '', adminContactTwitter: '', adminContactLinkedin: '' });
+      setForm({ title: '', description: '', location: '', customLocation: '', type: '', price: '', visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '', adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '', adminContactTwitter: '', adminContactLinkedin: '' });
       setImages([]);
       setVideos([]);
       setExistingMediaCount(0);
@@ -98,12 +103,18 @@ const AddProperty = () => {
         {message && <div className="rounded-xl bg-slate-100 p-4 text-slate-700">{message}</div>}
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="w-full border border-slate-300 rounded-2xl px-4 py-3" required />
         <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Description" className="w-full border border-slate-300 rounded-2xl px-4 py-3 h-32" required />
-        <select value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="w-full border border-slate-300 rounded-2xl px-4 py-3 bg-white" required>
+        <select value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value, customLocation: e.target.value === 'Other' ? form.customLocation : '' })} className="w-full border border-slate-300 rounded-2xl px-4 py-3 bg-white" required>
           <option value="">Select location</option>
           {LOCATIONS.map((location) => (
             <option key={location} value={location}>{location}</option>
           ))}
         </select>
+        {form.location === 'Other' && (
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Other location *</span>
+            <input value={form.customLocation} onChange={(e) => setForm({ ...form, customLocation: e.target.value })} placeholder="Enter location name" className="mt-2 w-full border border-slate-300 rounded-2xl px-4 py-3" required />
+          </label>
+        )}
         <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full border border-slate-300 rounded-2xl px-4 py-3 bg-white" required>
           <option value="">Select house type</option>
           {PROPERTY_TYPES.map((houseType) => (
