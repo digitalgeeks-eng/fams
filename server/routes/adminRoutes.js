@@ -19,9 +19,10 @@ import { getUserAdmin, updateUserAdmin, updateUserStatus } from '../controllers/
 import { getDeletedProperties } from '../controllers/propertyController.js';
 import { getAdminPayments, verifyPaymentAdmin } from '../controllers/paymentController.js';
 import { getAdminBookings } from '../controllers/bookingController.js';
+import { adminActionLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
-router.use(protect, authorizeRoles('admin'));
+router.use(protect, authorizeRoles('admin'), adminActionLimiter);
 router.post('/admins', authorizeAdminRoles('super_admin'), asyncHandler(createLocationAdmin));
 router.get('/admins', authorizeAdminRoles('super_admin'), asyncHandler(listAdmins));
 router.get('/users/search', authorizeAdminRoles('super_admin'), asyncHandler(searchUsersForPromotion));

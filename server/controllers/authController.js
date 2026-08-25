@@ -42,7 +42,7 @@ export const register = async (req, res) => {
   if (!normalizedName) return res.status(400).json({ message: 'Name is required' });
   if (!validateEmail(normalizedEmail)) return res.status(400).json({ message: 'Invalid email address' });
   if (!validatePasswordStrength(password)) return res.status(400).json({ message: 'Password must be at least 6 characters' });
-  if (!['student', 'agent', 'admin'].includes(normalizedRole)) return res.status(400).json({ message: 'Invalid role selected' });
+  if (!['student', 'agent'].includes(normalizedRole)) return res.status(400).json({ message: 'Invalid role selected' });
 
   // Agent-specific validation
   if (normalizedRole === 'agent') {

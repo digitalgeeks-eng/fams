@@ -6,8 +6,9 @@ export const notFound = (req, res, next) => {
 
 export const errorHandler = (err, req, res, next) => {
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  const isProduction = process.env.NODE_ENV === 'production';
   res.status(statusCode).json({
-    message: err.message,
-    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
+    message: isProduction && statusCode >= 500 ? 'An unexpected server error occurred.' : err.message,
+    ...(isProduction ? {} : { stack: err.stack })
   });
 };

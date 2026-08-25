@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Booking from '../models/Booking.js';
@@ -33,7 +34,7 @@ export const initializePaymentController = async (req, res, next) => {
     const response = await initializePayment(amount, req.user.email, { bookingId: booking._id.toString() });
     if (!response.status) return res.status(502).json({ message: response.message || 'Payment initialization failed' });
 
-    const payment = await Payment.create({ bookingId, paymentMethod, paymentReference: response.data.reference, amount, verificationStatus: 'pending' });
+    const payment = await Payment.create({ bookingId, userId: req.user._id, paymentMethod, paymentReference: response.data.reference, amount, isSyntheticTest: response.isTestMode === true, verificationStatus: 'pending' });
     booking.transactionReference = response.data.reference;
     await booking.save();
 
@@ -93,19 +94,23 @@ export const verifyPaymentController = async (req, res, next) => {
     const { reference } = req.params;
     if (!reference) return res.status(400).json({ message: 'Reference is required' });
 
-    const payment = await Payment.findOne({ paymentReference: reference });
+    const payment = await Payment.findOne({ paymentReference: reference }).select('+isSyntheticTest');
     if (!payment) return res.status(404).json({ message: 'Payment record not found' });
+    const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'price isUnavailable availabilityStatus');
+    if (!booking) return res.status(404).json({ message: 'Associated booking not found' });
+    if (booking.studentId.toString() !== req.user._id.toString() || payment.userId && payment.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Unauthorized payment access' });
+    }
+    if (payment.bookingId.toString() !== booking._id.toString()) return res.status(403).json({ message: 'Unauthorized payment access' });
     if (payment.verificationStatus === 'verified') {
       return res.status(400).json({ message: 'Payment has already been verified' });
     }
 
-    const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable availabilityStatus');
-    if (!booking) return res.status(404).json({ message: 'Associated booking not found' });
     if (booking.paymentStatus === 'paid' || booking.successfulPayment || booking.propertyId?.isUnavailable || booking.propertyId?.availabilityStatus === 'not_available') {
       return res.status(409).json({ message: 'The booking/property already has a completed payment and cannot be paid again' });
     }
 
-    if (reference.startsWith('test-')) {
+    if (payment.isSyntheticTest && process.env.NODE_ENV !== 'production' && process.env.ALLOW_SYNTHETIC_PAYMENTS === 'true') {
       const verifiedBooking = await verifyBookingPayment(payment);
       payment.verificationStatus = 'verified';
       payment.status = 'verified';
@@ -119,6 +124,10 @@ export const verifyPaymentController = async (req, res, next) => {
     if (!result.data || result.data.status !== 'success') {
       return res.status(400).json({ message: 'Payment verification was not successful' });
     }
+    if (result.data.reference && result.data.reference !== reference) return res.status(400).json({ message: 'Payment reference mismatch' });
+    if (Number(result.data.amount) !== Math.round(payment.amount * 100)) return res.status(400).json({ message: 'Payment amount mismatch' });
+    if (result.data.currency && result.data.currency !== 'NGN') return res.status(400).json({ message: 'Unsupported payment currency' });
+    if (result.data.metadata?.bookingId && String(result.data.metadata.bookingId) !== String(booking._id)) return res.status(400).json({ message: 'Payment booking mismatch' });
 
     let verifiedBooking;
     try {
@@ -201,8 +210,9 @@ export const submitManualPaymentProof = async (req, res, next) => {
       userId: req.user._id,
       paymentMethod: 'manual',
       paymentProvider: 'OPay',
-      accountName: 'Miracle Obadiah',
-      accountNumber: '8106083399',
+      accountName: process.env.BANK_ACCOUNT_NAME,
+      accountNumber: process.env.BANK_ACCOUNT_NUMBER,
+      bankName: process.env.BANK_NAME,
       paymentReference,
       transactionReference: paymentReference,
       amount: booking.propertyId.price,
@@ -233,15 +243,30 @@ export const submitManualPaymentProof = async (req, res, next) => {
 export const paymentWebhook = async (req, res, next) => {
   try {
     const signature = req.headers['x-paystack-signature'];
-    if (!signature || signature !== process.env.PAYSTACK_WEBHOOK_SECRET) {
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+    const webhookSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!signature || !webhookSecret) return res.status(401).send('Webhook signature mismatch');
+    const expectedSignature = crypto.createHmac('sha512', webhookSecret).update(rawBody).digest('hex');
+    const received = Buffer.from(String(signature));
+    const expected = Buffer.from(expectedSignature);
+    if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
       return res.status(401).send('Webhook signature mismatch');
     }
 
-    const event = req.body;
+    let event;
+    try {
+      event = JSON.parse(rawBody.toString('utf8'));
+    } catch (error) {
+      return res.status(400).send('Invalid webhook payload');
+    }
     if (event.event === 'charge.success' || event.event === 'payment.success') {
-      const reference = event.data.reference;
+      const reference = event.data?.reference;
+      if (!reference) return res.status(400).send('Webhook reference missing');
       const payment = await Payment.findOne({ paymentReference: reference });
       if (payment && payment.verificationStatus !== 'verified') {
+        if (event.data.amount !== undefined && Number(event.data.amount) !== Math.round(payment.amount * 100)) return res.status(400).send('Webhook amount mismatch');
+        if (event.data.currency && event.data.currency !== 'NGN') return res.status(400).send('Webhook currency mismatch');
+        if (event.data.metadata?.bookingId && String(event.data.metadata.bookingId) !== String(payment.bookingId)) return res.status(400).send('Webhook booking mismatch');
         const booking = await Booking.findById(payment.bookingId).populate('propertyId', 'isUnavailable availabilityStatus');
         if (booking && booking.paymentStatus !== 'paid' && !booking.successfulPayment && !booking.propertyId?.isUnavailable && booking.propertyId?.availabilityStatus !== 'not_available') {
           try {

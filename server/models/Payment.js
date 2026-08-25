@@ -18,7 +18,8 @@ const paymentSchema = new mongoose.Schema({
   verifiedAt: { type: Date },
   verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   adminNote: { type: String, trim: true, maxlength: 500 },
-  status: { type: String, enum: ['pending', 'proof_submitted', 'verified', 'rejected', 'failed'], default: 'pending' }
+  status: { type: String, enum: ['pending', 'proof_submitted', 'verified', 'rejected', 'failed'], default: 'pending' },
+  isSyntheticTest: { type: Boolean, default: false, select: false }
 }, { timestamps: true });
 
 export default mongoose.model('Payment', paymentSchema);

@@ -2,6 +2,7 @@ import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import { authorizeAdminRoles, authorizeRoles } from '../middleware/roleMiddleware.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { adminActionLimiter, messageLimiter } from '../middleware/rateLimiter.js';
 import {
   sendNotification,
   createChatMessage,
@@ -16,8 +17,8 @@ import {
 
 const router = express.Router();
 router.use(protect);
-router.post('/notifications', authorizeAdminRoles('super_admin'), asyncHandler(sendNotification));
-router.post('/messages', asyncHandler(createChatMessage));
+router.post('/notifications', authorizeAdminRoles('super_admin'), adminActionLimiter, asyncHandler(sendNotification));
+router.post('/messages', messageLimiter, asyncHandler(createChatMessage));
 router.get('/messages', asyncHandler(listChatMessages));
 router.get('/notifications', asyncHandler(listNotifications));
 router.put('/notifications/:id/read', asyncHandler(markNotificationRead));

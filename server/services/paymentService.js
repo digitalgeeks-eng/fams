@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const allowSyntheticPayments = isDevelopment && process.env.ALLOW_SYNTHETIC_PAYMENTS === 'true';
 const paystackTestUrl = process.env.PAYSTACK_TEST_URL || 'https://paystack.shop/pay/78ffdd1u7e';
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 const paystackCallbackUrl = `${clientUrl}/student/bookings`;
@@ -34,7 +36,7 @@ const validatePaystackConfig = () => {
   if (!paystackSecretKey || paystackSecretKey.includes('your_paystack')) {
     return {
       status: false,
-      message: 'PAYSTACK_SECRET_KEY is not configured correctly in the server .env file.'
+      message: 'Paystack is not configured. Add PAYSTACK_SECRET_KEY to the server environment.'
     };
   }
   return { status: true };
@@ -43,6 +45,7 @@ const validatePaystackConfig = () => {
 export const initializePayment = async (amount, email, metadata = {}) => {
   const configCheck = validatePaystackConfig();
   if (!configCheck.status) {
+    if (!allowSyntheticPayments) return configCheck;
     return {
       status: true,
       isTestMode: true,
@@ -73,6 +76,7 @@ export const initializePayment = async (amount, email, metadata = {}) => {
 export const verifyPayment = async (reference) => {
   const configCheck = validatePaystackConfig();
   if (!configCheck.status) {
+    if (!allowSyntheticPayments) return configCheck;
     return { status: true, data: { status: 'success', reference } };
   }
 

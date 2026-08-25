@@ -9,7 +9,9 @@ const run = async () => {
   try {
     const uri = process.env.MONGO_URI || 'mongodb://localhost:27017/fulafia-ams';
     await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
-    const email = 'admin@fulafia.edu.ng';
+    const email = process.env.ADMIN_EMAIL;
+    const password = process.env.ADMIN_PASSWORD;
+    if (!email || !password) throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be configured for admin bootstrap.');
     const existing = await User.findOne({ email });
     if (existing) {
       if (existing.role === 'admin' && !existing.adminRole) {
@@ -19,7 +21,6 @@ const run = async () => {
       console.log('Admin already exists:', existing.email);
       process.exit(0);
     }
-    const password = 'Admin@1234';
     const hashed = await bcrypt.hash(password, 10);
     const admin = await User.create({
       name: 'FULAFIA Admin',

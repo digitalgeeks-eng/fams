@@ -1,7 +1,7 @@
 import express from 'express';
 import { optionalProtect, protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
-import { uploadPropertyMedia } from '../middleware/uploadMiddleware.js';
+import { uploadPropertyMedia, validateUploadedFiles } from '../middleware/uploadMiddleware.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import {
   listProperties,
@@ -27,6 +27,7 @@ router.post(
     { name: 'images', maxCount: 15 },
     { name: 'videos', maxCount: 5 }
   ]),
+  validateUploadedFiles,
   asyncHandler(createProperty)
 );
 router.put(
@@ -37,6 +38,7 @@ router.put(
     { name: 'images', maxCount: 15 },
     { name: 'videos', maxCount: 5 }
   ]),
+  validateUploadedFiles,
   asyncHandler(updateProperty)
 );
 router.get('/:id/history', protect, authorizeRoles('admin'), asyncHandler(getPropertyHistory));
