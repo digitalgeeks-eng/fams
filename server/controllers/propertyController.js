@@ -163,6 +163,15 @@ export const updateProperty = async (req, res) => {
   if (req.body.location !== undefined && !normalizePropertyLocation({ location: req.body.location, customLocation: req.body.customLocation })) {
     return res.status(400).json({ message: 'Please select a valid location.' });
   }
+  const requestedLocation = req.body.location === undefined
+    ? property.location
+    : normalizePropertyLocation({ location: req.body.location, customLocation: req.body.customLocation });
+  const requestedCategory = req.body.location === undefined
+    ? (property.locationCategory || normalizePropertyLocation({ location: property.location }))
+    : String(req.body.location).trim().toLowerCase() === 'other' ? 'Other' : requestedLocation;
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, { location: requestedLocation, locationCategory: requestedCategory })) {
+    return res.status(403).json({ message: adminAccessMessage });
+  }
   if (req.body.location !== undefined) {
     updates.locationCategory = String(req.body.location).trim().toLowerCase() === 'other'
       ? 'Other'
@@ -228,7 +237,7 @@ export const updateProperty = async (req, res) => {
       editorRole: req.user.role,
       changes
     });
-    if (req.user.role === 'admin') await recordAdminActivity(req.user, 'property_edited', `Property ${property.title} was edited.`, { propertyId: property._id, propertyLocation: property.location });
+    if (req.user.role === 'admin') await recordAdminActivity(req.user, 'property_edited', `Property ${property.title} was edited.`, { propertyId: property._id, propertyLocation: updatedProperty.location });
   }
   res.json({ message: 'Property updated and sent for approval', data: updatedProperty });
 };
