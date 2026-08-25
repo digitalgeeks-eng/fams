@@ -23,6 +23,8 @@ const initializeDatabase = async () => {
       Recommendation.syncIndexes()
     ]);
 
+    await User.updateMany({ role: 'admin', adminRole: { $exists: false } }, { $set: { adminRole: 'super_admin' } });
+
     const adminEmail = 'admin@fulafia.edu.ng';
     const existingAdmin = await User.findOne({ email: adminEmail.toLowerCase() });
     if (!existingAdmin) {
@@ -32,6 +34,7 @@ const initializeDatabase = async () => {
         email: adminEmail.toLowerCase(),
         password: hashedPassword,
         role: 'admin',
+        adminRole: 'super_admin',
         verificationStatus: 'verified'
       });
       console.log('Admin user created successfully.');

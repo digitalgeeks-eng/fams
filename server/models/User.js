@@ -13,6 +13,8 @@ const userSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
   lastLoginAt: { type: Date },
   role: { type: String, enum: ['student', 'agent', 'admin'], default: 'student' },
+  adminRole: { type: String, enum: ['super_admin', 'location_admin'] },
+  assignedLocation: { type: String, trim: true },
   verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
   // Agent specific fields
   phone: { type: String, trim: true },

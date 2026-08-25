@@ -5,6 +5,8 @@ import PropertyEditHistory from '../models/PropertyEditHistory.js';
 import { updateRecommendationData } from '../services/recommendationService.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { normalizePropertyLocation } from '../utils/locations.js';
+import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
+import { recordAdminActivity } from '../utils/adminActivity.js';
 
 const uploadPropertyMediaToCloudinary = async (files = []) => Promise.all(files.map(async (file) => {
   const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
@@ -70,6 +72,9 @@ export const getProperty = async (req, res) => {
   if (req.user?.role === 'student') {
     await updateRecommendationData({ userId: req.user._id, viewedProperty: property._id, location: property.location, minPrice: property.price, maxPrice: property.price });
   }
+  if (req.user?.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
+    return res.status(403).json({ message: adminAccessMessage });
+  }
   res.json({ data: property });
 };
 
@@ -95,6 +100,12 @@ export const createProperty = async (req, res) => {
   if (!title || !description || !savedLocation || !type || !price) {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
   }
+  const locationCategory = String(location).trim().toLowerCase() === 'other'
+    ? 'Other'
+    : savedLocation;
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, { location: savedLocation, locationCategory })) {
+    return res.status(403).json({ message: adminAccessMessage });
+  }
   if (String(location).trim().toLowerCase() === 'other' && !String(customLocation || '').trim()) {
     return res.status(400).json({ message: 'Please enter the location.' });
   }
@@ -110,6 +121,7 @@ export const createProperty = async (req, res) => {
     title,
     description,
     location: savedLocation,
+    locationCategory,
     type,
     price,
     images,
@@ -138,6 +150,9 @@ export const updateProperty = async (req, res) => {
   if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to edit this property' });
   }
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
+    return res.status(403).json({ message: adminAccessMessage });
+  }
 
   const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
   const updates = { approvalStatus: 'pending' };
@@ -147,6 +162,11 @@ export const updateProperty = async (req, res) => {
   }
   if (req.body.location !== undefined && !normalizePropertyLocation({ location: req.body.location, customLocation: req.body.customLocation })) {
     return res.status(400).json({ message: 'Please select a valid location.' });
+  }
+  if (req.body.location !== undefined) {
+    updates.locationCategory = String(req.body.location).trim().toLowerCase() === 'other'
+      ? 'Other'
+      : normalizePropertyLocation({ location: req.body.location });
   }
   editableFields.forEach((field) => {
     if (req.body[field] === undefined) return;
@@ -208,6 +228,7 @@ export const updateProperty = async (req, res) => {
       editorRole: req.user.role,
       changes
     });
+    if (req.user.role === 'admin') await recordAdminActivity(req.user, 'property_edited', `Property ${property.title} was edited.`, { propertyId: property._id, propertyLocation: property.location });
   }
   res.json({ message: 'Property updated and sent for approval', data: updatedProperty });
 };
@@ -258,6 +279,9 @@ export const deleteProperty = async (req, res) => {
   if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to delete this property' });
   }
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
+    return res.status(403).json({ message: adminAccessMessage });
+  }
   if (property.isDeleted) return res.status(409).json({ message: 'Property is already archived' });
   property.isDeleted = true;
   property.deletedAt = new Date();
@@ -274,6 +298,7 @@ export const deleteProperty = async (req, res) => {
       { field: 'deleteReason', oldValue: undefined, newValue: property.deleteReason }
     ]
   });
+  if (req.user.role === 'admin') await recordAdminActivity(req.user, 'property_deleted', `Property ${property.title} was deleted.`, { propertyId: property._id, propertyLocation: property.location });
   res.json({ success: true, message: 'Property deleted successfully.', data: property });
 };
 
@@ -283,7 +308,7 @@ export const getAgentProperties = async (req, res) => {
 };
 
 export const getDeletedProperties = async (req, res) => {
-  const properties = await Property.find({ isDeleted: true })
+  const properties = await Property.find({ isDeleted: true, ...getAdminPropertyFilter(req.user) })
     .populate('agentId', 'name email')
     .populate('deletedBy', 'name email')
     .sort({ deletedAt: -1 });
@@ -294,6 +319,9 @@ export const getPropertyHistory = async (req, res, next) => {
   try {
     const property = await Property.findById(req.params.id).populate('agentId', 'name email').populate('deletedBy', 'name email');
     if (!property) return res.status(404).json({ message: 'Property not found' });
+    if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
+      return res.status(403).json({ message: adminAccessMessage });
+    }
     const [history, bookings, payments] = await Promise.all([
       PropertyEditHistory.find({ propertyId: property._id }).populate('editedBy', 'name email').sort({ editedAt: -1 }),
       Booking.find({ propertyId: property._id }).populate('studentId', 'name email').sort({ createdAt: -1 }),
@@ -309,6 +337,9 @@ export const restoreProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
   if (!property) return res.status(404).json({ message: 'Property not found' });
   if (!property.isDeleted) return res.status(409).json({ message: 'Property is not archived' });
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
+    return res.status(403).json({ message: adminAccessMessage });
+  }
   property.isDeleted = false;
   property.deletedAt = undefined;
   property.deletedBy = undefined;
@@ -323,5 +354,6 @@ export const restoreProperty = async (req, res) => {
     property.availabilityReason = undefined;
   }
   await property.save();
+  if (req.user.role === 'admin') await recordAdminActivity(req.user, 'property_restored', `Property ${property.title} was restored.`, { propertyId: property._id, propertyLocation: property.location });
   res.json({ success: true, message: 'Property restored successfully.', data: property });
 };

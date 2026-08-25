@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
+import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
+import { recordAdminActivity } from '../utils/adminActivity.js';
 import Property from '../models/Property.js';
 import User from '../models/User.js';
 import { initializePayment, verifyPayment as verifyPaystackPayment } from '../services/paymentService.js';
@@ -291,6 +293,11 @@ export const getAdminPayments = async (req, res, next) => {
   try {
     const { status = 'all', day = 'all', month = 'all', year = 'all', search = '' } = req.query;
     const filter = {};
+    if (!isSuperAdmin(req.user)) {
+      const propertyIds = await Property.find(getAdminPropertyFilter(req.user)).distinct('_id');
+      const bookingIds = await Booking.find({ propertyId: { $in: propertyIds } }).distinct('_id');
+      filter.bookingId = { $in: bookingIds };
+    }
 
     if (status !== 'all') {
       filter.verificationStatus = status;
@@ -372,6 +379,9 @@ export const verifyPaymentAdmin = async (req, res, next) => {
 
     const payment = await Payment.findById(id);
     if (!payment) return res.status(404).json({ message: 'Payment not found' });
+    const paymentScopeBooking = await Booking.findById(payment.bookingId).populate('propertyId', 'location locationCategory');
+    if (!paymentScopeBooking?.propertyId) return res.status(404).json({ message: 'Payment property not found' });
+    if (!isSuperAdmin(req.user) && !assertAdminPropertyAccess(req.user, paymentScopeBooking.propertyId)) return res.status(403).json({ message: adminAccessMessage });
     if (payment.verificationStatus === 'verified' && status === 'verified') {
       return res.status(400).json({ message: 'Payment is already verified' });
     }
@@ -408,6 +418,8 @@ export const verifyPaymentAdmin = async (req, res, next) => {
       payment.verifiedBy = undefined;
       await payment.save();
     }
+
+    await recordAdminActivity(req.user, status === 'verified' ? 'payment_verified' : 'payment_rejected', `Payment ${payment._id} was ${status}.`, { propertyId: paymentBooking.propertyId._id, propertyLocation: paymentBooking.propertyId.location });
 
     res.json({
       success: true,

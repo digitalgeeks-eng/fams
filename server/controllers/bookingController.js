@@ -1,5 +1,6 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
+import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
 
 export const createBooking = async (req, res) => {
   const { propertyId, checkInDate, checkOutDate, guestCount = 1 } = req.body;
@@ -74,7 +75,8 @@ export const getAgentBookings = async (req, res) => {
 };
 
 export const getAdminBookings = async (req, res) => {
-  const bookings = await Booking.find()
+  const propertyIds = await Property.find(getAdminPropertyFilter(req.user)).distinct('_id');
+  const bookings = await Booking.find(isSuperAdmin(req.user) ? {} : { propertyId: { $in: propertyIds } })
     .populate('studentId', 'name email')
     .populate({
       path: 'propertyId',
@@ -93,6 +95,7 @@ export const getBooking = async (req, res) => {
   if (booking.studentId._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Unauthorized access to booking' });
   }
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, booking.propertyId)) return res.status(403).json({ message: adminAccessMessage });
   res.json({ data: booking });
 };
 
@@ -117,6 +120,7 @@ export const cancelBooking = async (req, res) => {
 export const approveBooking = async (req, res) => {
   const booking = await Booking.findById(req.params.id).populate('propertyId', 'agentId');
   if (!booking) return res.status(404).json({ message: 'Booking not found' });
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, booking.propertyId)) return res.status(403).json({ message: adminAccessMessage });
   if (req.user.role === 'agent' && booking.propertyId.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to approve this booking' });
   }
@@ -131,6 +135,7 @@ export const approveBooking = async (req, res) => {
 export const rejectBooking = async (req, res) => {
   const booking = await Booking.findById(req.params.id).populate('propertyId', 'agentId');
   if (!booking) return res.status(404).json({ message: 'Booking not found' });
+  if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, booking.propertyId)) return res.status(403).json({ message: adminAccessMessage });
   if (req.user.role === 'agent' && booking.propertyId.agentId.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to reject this booking' });
   }

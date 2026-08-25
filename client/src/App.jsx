@@ -27,6 +27,7 @@ import ComplaintManagement from './pages/ComplaintManagement.jsx';
 import UserManagement from './pages/UserManagement.jsx';
 import Notifications from './pages/Notifications.jsx';
 import SendNotification from './pages/SendNotification.jsx';
+import AdminManagement from './pages/AdminManagement.jsx';
 import Navbar from './components/Navbar.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 
@@ -34,6 +35,13 @@ const PrivateRoute = ({ children, role }) => {
   const { user, loading } = useAuth();
   if (loading) return <LoadingSpinner />;
   if (!user || (role && user.role !== role)) return <Navigate to="/login" replace />;
+  return children;
+};
+
+const SuperAdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingSpinner />;
+  if (!user || user.role !== 'admin' || (user.adminRole && user.adminRole !== 'super_admin')) return <Navigate to="/admin" replace />;
   return children;
 };
 
@@ -64,6 +72,7 @@ const App = () => (
           <Route path="/agent/listings/:id/edit" element={<PrivateRoute role="agent"><AddProperty /></PrivateRoute>} />
           <Route path="/agent/booking-requests" element={<PrivateRoute role="agent"><BookingRequests /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>} />
+          <Route path="/admin/manage" element={<SuperAdminRoute><AdminManagement /></SuperAdminRoute>} />
           <Route path="/admin/agents" element={<PrivateRoute role="admin"><AgentVerification /></PrivateRoute>} />
           <Route path="/admin/properties" element={<PrivateRoute role="admin"><PropertyApproval /></PrivateRoute>} />
           <Route path="/admin/payments" element={<PrivateRoute role="admin"><PaymentVerification /></PrivateRoute>} />

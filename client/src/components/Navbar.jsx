@@ -46,6 +46,7 @@ const Navbar = () => {
 
           {user && user.role === 'admin' && (
             <>
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/manage" label="Admin Management" />}
               <MenuLink to="/admin/agents" label="Agents" />
               <MenuLink to="/admin/properties" label="Properties" />
               <MenuLink to="/admin/users" label="Users" />
@@ -116,6 +117,7 @@ const Navbar = () => {
 
           {user && user.role === 'admin' && (
             <>
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/manage" label="Admin Management" />}
               <MenuLink to="/admin/agents" label="Agents" />
               <MenuLink to="/admin/properties" label="Properties" />
               <MenuLink to="/admin/users" label="Users" />

@@ -23,6 +23,8 @@ const userResponse = (user) => ({
   profileImage: user.profileImage,
   authProvider: user.authProvider,
   status: user.status || 'active',
+  adminRole: user.role === 'admin' ? (user.adminRole || 'super_admin') : undefined,
+  assignedLocation: user.role === 'admin' ? user.assignedLocation : undefined,
   lastLoginAt: user.lastLoginAt
 });
 
@@ -207,7 +209,7 @@ export const login = async (req, res) => {
   await user.save();
   res.json({
     message: 'Login successful',
-    data: { user: { id: user._id, name: user.name, email: user.email, role: user.role, verificationStatus: user.verificationStatus }, token }
+    data: { user: userResponse(user), token }
   });
 };
 

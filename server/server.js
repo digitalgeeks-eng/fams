@@ -17,6 +17,7 @@ import complaintRoutes from './routes/complaintRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
+import User from './models/User.js';
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -67,6 +68,7 @@ let server;
 const startServer = async () => {
   try {
     await connectDatabase();
+    await User.updateMany({ role: 'admin', adminRole: { $exists: false } }, { $set: { adminRole: 'super_admin' } });
     server = http.createServer(app);
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

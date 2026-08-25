@@ -9,3 +9,12 @@ export const authorizeRoles = (...allowedRoles) => {
     next();
   };
 };
+
+export const authorizeAdminRoles = (...allowedAdminRoles) => (req, res, next) => {
+  const adminRole = req.user?.adminRole || 'super_admin';
+  if (req.user?.role !== 'admin' || !allowedAdminRoles.includes(adminRole)) {
+    res.status(403);
+    throw new Error('Access denied: insufficient administrator privileges');
+  }
+  next();
+};

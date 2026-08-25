@@ -25,6 +25,9 @@ export const protect = async (req, res, next) => {
       return next(new Error(`Account is ${user.status}. Contact an administrator.`));
     }
 
+    if (user.role === 'admin' && !user.adminRole) {
+      user.adminRole = 'super_admin';
+    }
     req.user = user;
     next();
   } catch (error) {

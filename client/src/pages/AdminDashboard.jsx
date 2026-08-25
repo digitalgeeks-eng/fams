@@ -2,10 +2,12 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { useAuth } from '../hooks/useAuth.jsx';
 
 const AdminDashboard = () => {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -38,7 +40,8 @@ const AdminDashboard = () => {
     <section className="space-y-8">
       <div className="rounded-3xl bg-white p-6 shadow-xl">
         <h1 className="text-3xl font-semibold">Admin dashboard</h1>
-        <p className="mt-2 text-slate-600">Manage agents, property approvals, payments, complaints, and users from one place.</p>
+        <p className="mt-2 text-slate-600">{user?.adminRole === 'location_admin' ? `Manage ${user.assignedLocation} properties and approvals.` : 'Manage agents, property approvals, payments, complaints, and users from one place.'}</p>
+        {user?.adminRole !== 'location_admin' && <Link to="/admin/manage" className="mt-4 inline-flex rounded-2xl bg-secondary px-4 py-2 font-semibold text-white hover:bg-slate-900">Admin Management</Link>}
       </div>
       <div className="grid gap-6 md:grid-cols-3">
         <Link to="/admin/agents" className="rounded-3xl bg-primary text-white p-6 shadow-xl hover:bg-slate-900">

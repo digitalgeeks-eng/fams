@@ -12,6 +12,7 @@ const propertySchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   description: { type: String, required: true, trim: true },
   location: { type: String, required: true, trim: true },
+  locationCategory: { type: String, trim: true, index: true },
   type: { type: String, enum: ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'], required: true },
   price: { type: Number, required: true },
   images: [{ type: mongoose.Schema.Types.Mixed }],

@@ -12,6 +12,10 @@ const run = async () => {
     const email = 'admin@fulafia.edu.ng';
     const existing = await User.findOne({ email });
     if (existing) {
+      if (existing.role === 'admin' && !existing.adminRole) {
+        existing.adminRole = 'super_admin';
+        await existing.save();
+      }
       console.log('Admin already exists:', existing.email);
       process.exit(0);
     }
@@ -22,6 +26,7 @@ const run = async () => {
       email,
       password: hashed,
       role: 'admin',
+      adminRole: 'super_admin',
       verificationStatus: 'verified'
     });
     console.log('Admin created successfully.');
