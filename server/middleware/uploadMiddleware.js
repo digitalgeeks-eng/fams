@@ -109,11 +109,11 @@ export const validateUploadedFiles = (req, res, next) => {
     ...(req.file ? [req.file] : []),
     ...Object.values(req.files || {}).flat()
   ];
-  const invalid = files.some((file) => {
-    if (file.mimetype === 'application/pdf') return hasPdfSignature(file.buffer);
-    if (file.mimetype.startsWith('video/')) return hasVideoSignature(file.buffer);
-    return hasImageSignature(file.buffer);
+  const hasInvalidFile = files.some((file) => {
+    if (file.mimetype === 'application/pdf') return !hasPdfSignature(file.buffer);
+    if (file.mimetype.startsWith('video/')) return !hasVideoSignature(file.buffer);
+    return !hasImageSignature(file.buffer);
   });
-  if (!invalid) return next();
-  return res.status(400).json({ message: 'Uploaded file content does not match an allowed image, video, or PDF type.' });
+  if (hasInvalidFile) return res.status(400).json({ message: 'Uploaded file content does not match an allowed image, video, or PDF type.' });
+  return next();
 };
