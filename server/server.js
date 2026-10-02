@@ -23,6 +23,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
+app.set('trust proxy', 1);
 
 if (!process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY.includes('your_paystack')) {
   console.warn('Warning: PAYSTACK_SECRET_KEY is not configured correctly. Paystack payment initialization will fail until it is set.');
