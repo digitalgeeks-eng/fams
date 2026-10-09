@@ -18,6 +18,24 @@ Location: `/server`
 4. `npm install`
 5. `npm run dev`
 
+### Registration Email Verification
+Email is sent through Brevo's transactional email API over HTTPS by default. Configure:
+- `BREVO_API_KEY` (Brevo API key)
+- `EMAIL_FROM` (sender email address verified in Brevo)
+- `EMAIL_PROVIDER=brevo` (optional; this is the default)
+
+The existing SMTP transport remains available for environments that allow outbound SMTP. To explicitly use it, set `EMAIL_PROVIDER=smtp` and configure:
+- `EMAIL_HOST`
+- `EMAIL_PORT` (defaults to `587`)
+- `EMAIL_SECURE` (`true` to use a secure TLS connection)
+- `EMAIL_USER`
+- `EMAIL_PASS`
+- `EMAIL_FROM` (optional for SMTP; defaults to `EMAIL_USER`)
+
+SMTP is not used automatically if Brevo is missing or fails. On Render Free, keep `EMAIL_PROVIDER=brevo` (or unset it) to avoid attempting blocked SMTP ports.
+
+`JWT_SECRET` is also used to securely hash verification codes; configure it as a long, random secret. Registration completion uses a MongoDB transaction, so the MongoDB deployment must support transactions; MongoDB Atlas clusters do.
+
 ### MongoDB Atlas
 Use your Atlas connection string in the server `.env` file:
 - `MONGO_URI=mongodb+srv://<your-username>:<your-password>@<your-cluster>.mongodb.net/fulafia-ams?retryWrites=true&w=majority`

@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
   assignedLocation: { type: String, trim: true },
   adminSource: { type: String, enum: ['created_as_admin', 'promoted_existing_user'] },
   verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
+  emailVerifiedAt: { type: Date },
   // Agent specific fields
   phone: { type: String, trim: true },
   company: { type: String, trim: true },

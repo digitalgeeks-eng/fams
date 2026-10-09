@@ -48,6 +48,18 @@ export const AuthProvider = ({ children }) => {
   const register = async (payload) => {
     try {
       const response = await api.post('/auth/register', payload);
+      setError(null);
+      return response.data;
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || 'Registration failed. Please try again.';
+      setError(errorMsg);
+      throw err;
+    }
+  };
+
+  const completeRegistration = async (credentials) => {
+    try {
+      const response = await api.post('/auth/verify-registration', credentials);
       const token = response.data.data.token;
       localStorage.setItem('amsToken', token);
       setAuthToken(token);
@@ -55,7 +67,7 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       return response.data;
     } catch (err) {
-      const errorMsg = err.response?.data?.message || 'Registration failed. Please try again.';
+      const errorMsg = err.response?.data?.message || 'Unable to verify your email. Please try again.';
       setError(errorMsg);
       throw err;
     }
@@ -85,7 +97,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, loginWithGoogle, register, logout, setError, clearError: () => setError(null) }}>
+    <AuthContext.Provider value={{ user, loading, error, login, loginWithGoogle, register, completeRegistration, logout, setError, clearError: () => setError(null) }}>
       {children}
     </AuthContext.Provider>
   );

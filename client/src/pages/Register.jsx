@@ -1,12 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api.js';
-import { setAuthToken } from '../services/api.js';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../hooks/useAuth.jsx';
 
 const Register = () => {
-  const [step, setStep] = useState(1); // Step 1: Basic, Step 2: Agent details (if agent)
+  const [step, setStep] = useState(1); // Basic registration, agent details, then email verification
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -27,29 +26,34 @@ const Register = () => {
   const [licenseImage, setLicenseImage] = useState(null);
   const [cameraMode, setCameraMode] = useState(null); // 'id', 'license', or null
   const [error, setError] = useState('');
-  const [verificationMessage, setVerificationMessage] = useState('');
-  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
-  const [emailVerified, setEmailVerified] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, register, completeRegistration } = useAuth();
   const cameraRef = useRef(null);
   const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = setTimeout(() => setResendCooldown((remaining) => remaining - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleBasicChange = (e) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
     setError('');
-    if (name === 'email') {
-      setEmailVerificationSent(false);
-      setEmailVerified(false);
-      setVerificationMessage('');
-    }
+    setSuccessMessage('');
   };
 
   const handleAgentChange = (e) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
+    setError('');
+    setSuccessMessage('');
   };
 
   const handleFileUpload = (e, type) => {
@@ -110,37 +114,10 @@ const Register = () => {
     try {
       setLoading(true);
       setError('');
-      if (!emailVerificationSent) {
-        await api.post('/auth/send-registration-verification', { email: form.email });
-        setEmailVerificationSent(true);
-        setVerificationMessage('Verification link sent. Open it in your email, then return here to continue.');
-        return;
-      }
-
-      const response = await api.get('/auth/registration-verification-status', { params: { email: form.email } });
-      if (!response.data?.data?.verified) {
-        setError('Please open the verification link in your email before continuing.');
-        return;
-      }
-
-      setEmailVerified(true);
       if (form.role === 'agent') setStep(2);
       else await submitRegistration();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Unable to verify your email. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resendVerification = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      await api.post('/auth/send-registration-verification', { email: form.email });
-      setVerificationMessage('A fresh verification link has been sent. It expires in 30 minutes.');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to resend the verification link.');
+      setError(err.response?.data?.message || err.message || 'Unable to complete registration. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -182,17 +159,52 @@ const Register = () => {
       }
 
       // Use api service for the request
-      const response = await api.post('/auth/register', formData);
-
-      // Store token
-      if (response.data?.data?.token) {
-        localStorage.setItem('amsToken', response.data.data.token);
-        setAuthToken(response.data.data.token);
-      }
-
-      navigate(form.role === 'agent' ? '/agent' : '/student');
+      const response = await register(formData);
+      setVerificationEmail(response.data?.email || form.email.trim().toLowerCase());
+      setVerificationCode('');
+      setResendCooldown(response.data?.resendAfterSeconds || 60);
+      setSuccessMessage(response.message);
+      setStep(3);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyRegistration = async (e) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(verificationCode)) {
+      setError('Enter the six-digit verification code.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      const response = await completeRegistration({ email: verificationEmail, code: verificationCode });
+      const role = response.data.user.role;
+      navigate(role === 'agent' ? '/agent' : '/student');
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Unable to verify your email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendRegistrationCode = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      setSuccessMessage('');
+      const response = await api.post('/auth/resend-registration-code', { email: verificationEmail });
+      setResendCooldown(response.data?.data?.resendAfterSeconds || 60);
+      setSuccessMessage(response.data?.message || 'A new verification code has been sent.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to resend the verification code.');
+      if (err.response?.data?.data?.resendAfterSeconds) {
+        setResendCooldown(err.response.data.data.resendAfterSeconds);
+      }
     } finally {
       setLoading(false);
     }
@@ -218,12 +230,14 @@ const Register = () => {
         <div className="mb-6 sm:mb-8 space-y-2 sm:space-y-3">
           <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-secondary">Create account</p>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-950">
-            {step === 1 ? 'Register for FULAFIA AMS' : 'Complete Your Agent Profile'}
+            {step === 1 ? 'Register for FULAFIA AMS' : step === 2 ? 'Complete Your Agent Profile' : 'Verify Your Email'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            {step === 1 
+            {step === 1
               ? 'Sign up as a student or agent and start managing bookings, listings, and payments.'
-              : 'Provide your professional information and upload required documents for verification.'}
+              : step === 2
+                ? 'Provide your professional information and upload required documents for verification.'
+                : 'Enter the six-digit code sent to your email to complete registration.'}
           </p>
         </div>
 
@@ -232,15 +246,11 @@ const Register = () => {
             {error}
           </div>
         )}
-        {verificationMessage && (
-          <div className="mb-4 rounded-2xl bg-emerald-50 px-3 py-3 text-xs text-emerald-700 ring-1 ring-emerald-200 sm:mb-6 sm:px-4 sm:text-sm">
-            <p>{verificationMessage}</p>
-            {emailVerificationSent && !emailVerified && (
-              <button type="button" onClick={resendVerification} disabled={loading} className="mt-2 font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-950">Resend verification link</button>
-            )}
+        {successMessage && (
+          <div className="mb-4 sm:mb-6 rounded-2xl bg-emerald-50 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-emerald-700 ring-1 ring-emerald-200">
+            {successMessage}
           </div>
         )}
-
         {/* STEP 1: Basic Registration */}
         {step === 1 && (
           <form onSubmit={submitBasicForm} className="space-y-4 sm:space-y-5">
@@ -304,9 +314,10 @@ const Register = () => {
 
             <button
               type="submit"
+              disabled={loading}
               className="inline-flex w-full items-center justify-center rounded-2xl sm:rounded-3xl bg-primary px-5 py-2.5 sm:py-3 text-sm sm:text-base font-semibold text-white transition hover:bg-blue-600 mt-2 sm:mt-0"
             >
-              {loading ? 'Checking email...' : !emailVerificationSent ? 'Verify email to continue' : form.role === 'agent' ? 'I have verified - continue' : 'I have verified - register'}
+              {loading ? 'Continuing...' : form.role === 'agent' ? 'Continue' : 'Send verification code'}
             </button>
           </form>
         )}
@@ -512,9 +523,65 @@ const Register = () => {
                 disabled={loading || !idImage}
                 className="flex-1 rounded-2xl sm:rounded-3xl bg-primary px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white transition hover:bg-blue-600 disabled:bg-slate-400 disabled:cursor-not-allowed"
               >
-                {loading ? 'Registering...' : 'Complete Registration'}
+                {loading ? 'Sending verification code...' : 'Send verification code'}
               </button>
             </div>
+          </form>
+        )}
+
+        {step === 3 && (
+          <form onSubmit={verifyRegistration} className="space-y-4 sm:space-y-6">
+            <p className="text-sm text-slate-600">
+              A six-digit verification code was sent to <span className="font-semibold text-slate-900">{verificationEmail}</span>.
+              The code expires in 10 minutes.
+            </p>
+            <label className="block">
+              <span className="text-xs sm:text-sm font-medium text-slate-700">Verification code</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                value={verificationCode}
+                onChange={(event) => {
+                  setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+                  setError('');
+                }}
+                className="mt-1.5 sm:mt-2 w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-slate-50 px-3 sm:px-4 py-2.5 sm:py-3 text-center text-lg tracking-[0.4em] text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                aria-label="Six-digit email verification code"
+              />
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(form.role === 'agent' ? 2 : 1);
+                  setError('');
+                  setSuccessMessage('');
+                }}
+                disabled={loading}
+                className="flex-1 rounded-2xl sm:rounded-3xl border-2 border-slate-300 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={loading || verificationCode.length !== 6}
+                className="flex-1 rounded-2xl sm:rounded-3xl bg-primary px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white transition hover:bg-blue-600 disabled:bg-slate-400 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Verifying...' : 'Verify & Complete Registration'}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={resendRegistrationCode}
+              disabled={loading || resendCooldown > 0}
+              className="w-full text-center text-sm font-semibold text-primary underline underline-offset-2 disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Code'}
+            </button>
           </form>
         )}
       </div>
