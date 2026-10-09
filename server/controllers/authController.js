@@ -139,8 +139,16 @@ const issueRegistrationCode = async (email, registrationData) => {
   } catch (error) {
     console.error('Registration verification email delivery failed:', getEmailDeliveryDiagnostics(error));
     await EmailVerification.updateOne(
-      { _id: pending._id, registrationStatus: 'pending', verificationCodeHash: codeHash },
-      { $unset: { verificationCodeHash: '', verificationCodeExpiresAt: '', lastCodeSentAt: '' } }
+      {
+        _id: pending._id,
+        registrationStatus: 'pending',
+        verificationCodeHash: codeHash,
+        resendCount: { $gt: 0 }
+      },
+      {
+        $unset: { verificationCodeHash: '', verificationCodeExpiresAt: '', lastCodeSentAt: '' },
+        $inc: { resendCount: -1 }
+      }
     );
     return { status: 'email-failed' };
   }
