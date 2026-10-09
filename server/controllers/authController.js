@@ -8,7 +8,7 @@ import EmailVerification from '../models/EmailVerification.js';
 import { validateBankDetails, validateEmail, validatePasswordStrength, validateRequired } from '../utils/validators.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { OAuth2Client } from 'google-auth-library';
-import { sendEmail } from '../services/emailService.js';
+import { getEmailDeliveryDiagnostics, sendEmail } from '../services/emailService.js';
 
 dotenv.config();
 
@@ -137,7 +137,7 @@ const issueRegistrationCode = async (email, registrationData) => {
       html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;"><p>Welcome to the FULAFIA Accommodation Management System.</p><p>Thank you for registering.</p><p>Your email verification code is:</p><p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${code}</p><p>This code will expire in 10 minutes.</p><p>If you did not request this registration, please ignore this email.</p><p>FULAFIA Accommodation Management System</p></div>`
     });
   } catch (error) {
-    console.error('Registration verification email delivery failed:', error.code || error.name || 'Unknown mail transport error');
+    console.error('Registration verification email delivery failed:', getEmailDeliveryDiagnostics(error));
     await EmailVerification.updateOne(
       { _id: pending._id, registrationStatus: 'pending', verificationCodeHash: codeHash },
       { $unset: { verificationCodeHash: '', verificationCodeExpiresAt: '', lastCodeSentAt: '' } }

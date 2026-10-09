@@ -16,17 +16,61 @@ const smtpTransporter = nodemailer.createTransport({
   }
 });
 
+export class EmailDeliveryError extends Error {
+  constructor(provider, category, message, statusCode = null) {
+    super(message);
+    this.name = 'EmailDeliveryError';
+    this.provider = provider;
+    this.category = category;
+    this.statusCode = statusCode;
+  }
+}
+
+const createBrevoHttpError = (statusCode) => {
+  if (statusCode === 401 || statusCode === 403) {
+    return new EmailDeliveryError('brevo', 'authentication', 'Brevo rejected the API credentials or request authorization.', statusCode);
+  }
+  if (statusCode === 400 || statusCode === 422) {
+    return new EmailDeliveryError('brevo', 'request_validation', 'Brevo rejected the request. Verify EMAIL_FROM is a verified sender and the request fields are valid.', statusCode);
+  }
+  if (statusCode === 429) {
+    return new EmailDeliveryError('brevo', 'rate_limit', 'Brevo rate limit reached.', statusCode);
+  }
+  if (statusCode >= 500) {
+    return new EmailDeliveryError('brevo', 'provider', 'Brevo returned a server error.', statusCode);
+  }
+  return new EmailDeliveryError('brevo', 'http', 'Brevo returned an unsuccessful HTTP response.', statusCode);
+};
+
+export const getEmailDeliveryDiagnostics = (error) => {
+  if (error instanceof EmailDeliveryError) {
+    return {
+      provider: error.provider,
+      category: error.category,
+      statusCode: error.statusCode,
+      message: error.message
+    };
+  }
+
+  return {
+    provider: emailProvider,
+    category: 'unexpected',
+    statusCode: null,
+    message: 'Email delivery failed due to an unexpected internal error.'
+  };
+};
+
 export const sendEmail = async ({ to, subject, text, html }) => {
   if (!to || !subject || (!text && !html)) {
-    throw new Error('Email recipient, subject and body are required');
+    throw new EmailDeliveryError(emailProvider, 'request_validation', 'Email recipient, subject and body are required.');
   }
 
   if (emailProvider === 'brevo') {
     if (!process.env.BREVO_API_KEY) {
-      throw new Error('BREVO_API_KEY is required when EMAIL_PROVIDER is brevo');
+      throw new EmailDeliveryError('brevo', 'configuration', 'BREVO_API_KEY is not configured.');
     }
     if (!process.env.EMAIL_FROM) {
-      throw new Error('EMAIL_FROM is required when EMAIL_PROVIDER is brevo');
+      throw new EmailDeliveryError('brevo', 'configuration', 'EMAIL_FROM is not configured.');
     }
 
     let response;
@@ -43,32 +87,39 @@ export const sendEmail = async ({ to, subject, text, html }) => {
           'content-type': 'application/json',
           accept: 'application/json'
         },
-        timeout: 15000
+        timeout: 15000,
+        validateStatus: () => true
       });
     } catch (error) {
-      const status = error.response?.status;
-      throw new Error(status
-        ? `Brevo email API request failed with status ${status}.`
-        : 'Brevo email API request failed.');
+      const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+      throw new EmailDeliveryError(
+        'brevo',
+        isTimeout ? 'timeout' : 'network',
+        isTimeout ? 'Brevo API request timed out.' : 'Could not connect to the Brevo API.'
+      );
     }
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Brevo email API request failed with status ${response.status}.`);
+      throw createBrevoHttpError(response.status);
     }
     return response.data;
   }
 
   if (emailProvider === 'smtp') {
-    return smtpTransporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to,
-      subject,
-      text,
-      html
-    });
+    try {
+      return await smtpTransporter.sendMail({
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to,
+        subject,
+        text,
+        html
+      });
+    } catch {
+      throw new EmailDeliveryError('smtp', 'transport', 'SMTP email delivery failed.');
+    }
   }
 
-  throw new Error('EMAIL_PROVIDER must be either brevo or smtp');
+  throw new EmailDeliveryError(emailProvider, 'configuration', 'EMAIL_PROVIDER must be either brevo or smtp.');
 };
 
 export const buildNotificationEmail = ({ title, message }) => ({
