@@ -6,6 +6,9 @@ import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import Listings from './pages/Listings.jsx';
+import AboutUs from './pages/AboutUs.jsx';
+import ContactUs from './pages/ContactUs.jsx';
+import ContactInquiries from './pages/ContactInquiries.jsx';
 import PropertyDetails from './pages/PropertyDetails.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
 import AgentDashboard from './pages/AgentDashboard.jsx';
@@ -71,6 +74,8 @@ const App = () => (
           <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/verify-email/:token" element={<VerifyEmail />} />
           <Route path="/listings" element={<Listings />} />
+          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/contact-us" element={<ContactUs />} />
           <Route path="/properties/:id" element={<PropertyDetails />} />
           <Route path="/student" element={<PrivateRoute role="student"><StudentDashboard /></PrivateRoute>} />
           <Route path="/student/bookings" element={<PrivateRoute role="student"><MyBookings /></PrivateRoute>} />
@@ -93,6 +98,7 @@ const App = () => (
           <Route path="/admin/complaints" element={<SuperAdminRoute><ComplaintManagement /></SuperAdminRoute>} />
           <Route path="/admin/users" element={<SuperAdminRoute><UserManagement /></SuperAdminRoute>} />
           <Route path="/admin/notifications" element={<SuperAdminRoute><SendNotification /></SuperAdminRoute>} />
+          <Route path="/admin/contact-inquiries" element={<SuperAdminRoute><ContactInquiries /></SuperAdminRoute>} />
           <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
         </Routes>
       </main>

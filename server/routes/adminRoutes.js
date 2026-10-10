@@ -20,6 +20,7 @@ import { getDeletedProperties } from '../controllers/propertyController.js';
 import { getAdminPayments, verifyPaymentAdmin } from '../controllers/paymentController.js';
 import { getAdminBookings } from '../controllers/bookingController.js';
 import { adminActionLimiter } from '../middleware/rateLimiter.js';
+import { listContactInquiries, updateContactInquiryStatus } from '../controllers/contactInquiryController.js';
 
 const router = express.Router();
 router.use(protect, authorizeRoles('admin'), adminActionLimiter);
@@ -29,6 +30,8 @@ router.get('/users/search', authorizeAdminRoles('super_admin'), asyncHandler(sea
 router.post('/users/:id/promote', authorizeAdminRoles('super_admin'), asyncHandler(promoteUserToLocationAdmin));
 router.patch('/admins/:id/scope', authorizeAdminRoles('super_admin'), asyncHandler(updateAdminScope));
 router.get('/activities', authorizeAdminRoles('super_admin'), asyncHandler(listAdminActivities));
+router.get('/contact-inquiries', authorizeAdminRoles('super_admin'), asyncHandler(listContactInquiries));
+router.patch('/contact-inquiries/:id/status', authorizeAdminRoles('super_admin'), asyncHandler(updateContactInquiryStatus));
 router.get('/analytics', asyncHandler(getAnalytics));
 router.get('/agents', authorizeAdminRoles('super_admin'), asyncHandler(listAgents));
 router.get('/agents/:id', authorizeAdminRoles('super_admin'), asyncHandler(getAgentDetails));

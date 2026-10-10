@@ -36,6 +36,9 @@ SMTP is not used automatically if Brevo is missing or fails. On Render Free, kee
 
 `JWT_SECRET` is also used to securely hash verification codes; configure it as a long, random secret. Registration completion uses a MongoDB transaction, so the MongoDB deployment must support transactions; MongoDB Atlas clusters do.
 
+### Contact Inquiries
+The public contact form submits inquiries to `POST /api/contact`. Submissions are stored in MongoDB and are limited to five requests per IP per 15 minutes. Super Admins can review and update inquiry status from the Contact Inquiries page; its endpoints require an authenticated Super Admin account.
+
 ### MongoDB Atlas
 Use your Atlas connection string in the server `.env` file:
 - `MONGO_URI=mongodb+srv://<your-username>:<your-password>@<your-cluster>.mongodb.net/fulafia-ams?retryWrites=true&w=majority`

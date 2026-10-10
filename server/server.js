@@ -16,6 +16,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import User from './models/User.js';
 
@@ -51,6 +52,7 @@ app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/contact', contactRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/bookings', bookingRoutes);

@@ -36,6 +36,8 @@ const Navbar = () => {
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1 text-sm font-medium text-slate-700">
           <MenuLink to="/listings" label="Listings" />
+          <MenuLink to="/about-us" label="About Us" />
+          <MenuLink to="/contact-us" label="Contact Us" />
           
           {!user && (
             <>
@@ -54,6 +56,7 @@ const Navbar = () => {
               {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/notifications" label="Send Notification" />}
               <MenuLink to="/notifications" label="Notifications" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/contact-inquiries" label="Contact Inquiries" />}
             </>
           )}
 
@@ -107,6 +110,8 @@ const Navbar = () => {
       {mobileMenuOpen && (
         <nav className="md:hidden border-t border-slate-200 bg-white px-4 py-3 space-y-1 max-h-[calc(100vh-70px)] overflow-y-auto">
           <MenuLink to="/listings" label="Listings" />
+          <MenuLink to="/about-us" label="About Us" />
+          <MenuLink to="/contact-us" label="Contact Us" />
           
           {!user && (
             <>
@@ -125,6 +130,7 @@ const Navbar = () => {
               {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/notifications" label="Send Notification" />}
               <MenuLink to="/notifications" label="Notifications" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/contact-inquiries" label="Contact Inquiries" />}
               <MenuLink to="/admin" label="Dashboard" />
             </>
           )}

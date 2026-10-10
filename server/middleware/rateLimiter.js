@@ -14,6 +14,7 @@ export const authLimiter = createLimiter(10, 15 * 60 * 1000);
 export const emailLimiter = createLimiter(5, 15 * 60 * 1000);
 export const registrationVerificationLimiter = createLimiter(5, 15 * 60 * 1000);
 export const registrationResendLimiter = createLimiter(5, 60 * 60 * 1000);
+export const contactInquiryLimiter = createLimiter(5, 15 * 60 * 1000);
 export const paymentLimiter = createLimiter(30, 15 * 60 * 1000);
 export const uploadLimiter = createLimiter(20, 15 * 60 * 1000);
 export const messageLimiter = createLimiter(60, 15 * 60 * 1000);
