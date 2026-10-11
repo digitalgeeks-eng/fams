@@ -23,7 +23,7 @@ const run = async () => {
     }
     const hashed = await bcrypt.hash(password, 10);
     const admin = await User.create({
-      name: 'FULAFIA Admin',
+      name: 'StudentNest Admin',
       email,
       password: hashed,
       role: 'admin',

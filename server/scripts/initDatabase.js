@@ -32,7 +32,7 @@ const initializeDatabase = async () => {
     if (!existingAdmin) {
       const hashedPassword = await bcrypt.hash(adminPassword, 10);
       await User.create({
-        name: 'FULAFIA Admin',
+        name: 'StudentNest Admin',
         email: adminEmail.toLowerCase(),
         password: hashedPassword,
         role: 'admin',

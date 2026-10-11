@@ -230,7 +230,7 @@ const Register = () => {
         <div className="mb-6 sm:mb-8 space-y-2 sm:space-y-3">
           <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-secondary">Create account</p>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-950">
-            {step === 1 ? 'Register for FULAFIA AMS' : step === 2 ? 'Complete Your Agent Profile' : 'Verify Your Email'}
+            {step === 1 ? 'Register for StudentNest' : step === 2 ? 'Complete Your Agent Profile' : 'Verify Your Email'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
             {step === 1

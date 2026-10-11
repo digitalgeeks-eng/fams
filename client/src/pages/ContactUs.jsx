@@ -51,7 +51,7 @@ const ContactUs = () => {
       <header className="rounded-3xl bg-gradient-to-br from-primary/10 via-white to-white p-6 shadow-card ring-1 ring-slate-200 sm:p-10">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">We’re here to help</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Contact Us</h1>
-        <p className="mt-4 max-w-2xl leading-7 text-slate-600">Send a question or reach the FAMS team directly using the contact details below.</p>
+        <p className="mt-4 max-w-2xl leading-7 text-slate-600">Send a question or reach the StudentNest team directly using the contact details below.</p>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">

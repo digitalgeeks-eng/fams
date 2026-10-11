@@ -1,7 +1,7 @@
 {
   "name": "fulafia-ams",
   "version": "1.0.0",
-  "description": "FULAFIA Accommodation Management System",
+  "description": "StudentNest — Find Your Next Place to Stay.",
   "private": true,
   "workspaces": [
     "client",

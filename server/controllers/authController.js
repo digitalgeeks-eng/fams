@@ -132,9 +132,9 @@ const issueRegistrationCode = async (email, registrationData) => {
   try {
     await sendEmail({
       to: email,
-      subject: 'FAMS — Verify Your Email Address',
-      text: `Welcome to the FULAFIA Accommodation Management System.\n\nThank you for registering.\n\nYour email verification code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you did not request this registration, please ignore this email.\n\nFULAFIA Accommodation Management System`,
-      html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;"><p>Welcome to the FULAFIA Accommodation Management System.</p><p>Thank you for registering.</p><p>Your email verification code is:</p><p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${code}</p><p>This code will expire in 10 minutes.</p><p>If you did not request this registration, please ignore this email.</p><p>FULAFIA Accommodation Management System</p></div>`
+      subject: 'StudentNest — Verify Your Email Address',
+      text: `Welcome to StudentNest.\n\nThank you for registering.\n\nYour email verification code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you did not request this registration, please ignore this email.\n\nStudentNest`,
+      html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;"><p>Welcome to StudentNest.</p><p>Thank you for registering.</p><p>Your email verification code is:</p><p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${code}</p><p>This code will expire in 10 minutes.</p><p>If you did not request this registration, please ignore this email.</p><p>StudentNest</p></div>`
     });
   } catch (error) {
     console.error('Registration verification email delivery failed:', getEmailDeliveryDiagnostics(error));
@@ -523,7 +523,7 @@ export const sendRegistrationVerification = async (req, res) => {
   try {
     await sendEmail({
       to: normalizedEmail,
-      subject: 'Verify your FULAFIA AMS email',
+      subject: 'Verify your StudentNest email',
       text: `Verify your email address to continue registration: ${verificationUrl}\n\nThis link expires in 30 minutes.`,
       html: `<p>Verify your email address to continue registration:</p><p><a href="${verificationUrl}">Verify email address</a></p><p>This link expires in 30 minutes.</p>`
     });
@@ -605,9 +605,9 @@ export const forgotPassword = async (req, res) => {
   const resetUrl = `${clientUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
   await sendEmail({
     to: user.email,
-    subject: 'Reset your FULAFIA AMS password',
+    subject: 'Reset your StudentNest password',
     text: `Use this link to reset your password: ${resetUrl}\n\nThis link expires in 1 hour. If you did not request this, you can ignore this email.`,
-    html: `<p>Use the link below to reset your FULAFIA AMS password:</p><p><a href="${resetUrl}">Reset password</a></p><p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>`
+    html: `<p>Use the link below to reset your StudentNest password:</p><p><a href="${resetUrl}">Reset password</a></p><p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>`
   });
 
   return res.json(response);

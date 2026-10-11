@@ -30,7 +30,7 @@ const Navbar = () => {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 sm:gap-3 text-sm sm:text-lg font-semibold tracking-wide text-slate-900 flex-shrink-0">
           <span className="inline-flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-2xl bg-primary text-white shadow-card text-sm sm:text-base font-bold">F</span>
-          <span className="hidden sm:inline">FULAFIA AMS</span>
+          <span className="hidden sm:inline">StudentNest</span>
         </Link>
 
         {/* Desktop Navigation */}

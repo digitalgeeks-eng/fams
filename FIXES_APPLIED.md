@@ -116,7 +116,7 @@ cd client && npm run dev  # Terminal 2
 ### Check Backend is Working
 ```
 In browser, go to: http://localhost:5000
-Should see: {"message":"FULAFIA AMS API is running"}
+Should see: {"message":"StudentNest API is running"}
 ```
 
 ### Check Database Connection

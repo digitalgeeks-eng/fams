@@ -61,7 +61,7 @@ app.use('/api/complaints', complaintRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/communications', communicationRoutes);
 
-app.get('/', (req, res) => res.json({ message: 'FULAFIA AMS API is running' }));
+app.get('/', (req, res) => res.json({ message: 'StudentNest API is running' }));
 
 app.use(notFound);
 app.use(errorHandler);

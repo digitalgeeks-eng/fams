@@ -88,7 +88,7 @@ const Listings = () => {
         <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-semibold text-slate-950">Find your next place to stay</h1>
-            <p className="mt-1.5 sm:mt-2 text-sm text-slate-600">Browse available FULAFIA accommodation and narrow your search by location, type, or price.</p>
+            <p className="mt-1.5 sm:mt-2 text-sm text-slate-600"><span className="font-medium text-slate-700">Find Your Next Place to Stay.</span> Browse accommodation around the Federal University of Lafia and narrow your search by location, type, or price.</p>
           </div>
           <div className="inline-flex items-center rounded-2xl sm:rounded-3xl bg-slate-50 px-3 sm:px-4 py-2 text-xs sm:text-sm text-slate-600 shadow-sm whitespace-nowrap">
             <span className="mr-2 text-primary">•</span>

@@ -1,7 +1,7 @@
 const sections = [
   {
     title: 'Who We Are',
-    body: 'FAMS helps people looking for accommodation connect with property owners and agents. We are initially focused on the Federal University of Lafia community and the surrounding areas.'
+    body: 'StudentNest helps people looking for accommodation connect with property owners and agents. We are initially focused on the Federal University of Lafia community and the surrounding areas.'
   },
   {
     title: 'Our Mission',
@@ -13,11 +13,11 @@ const sections = [
   },
   {
     title: 'What We Offer',
-    body: 'FAMS provides accommodation listings, location-based search, property details, and tools that help students browse options and help property agents manage their listings.'
+    body: 'StudentNest provides accommodation listings, location-based search, property details, and tools that help students browse options and help property agents manage their listings.'
   },
   {
-    title: 'Why Choose FAMS',
-    body: 'Compare available property information in one place, narrow options with search filters, and open listing details when you want to learn more. FAMS makes it more convenient to explore accommodation choices.'
+    title: 'Why Choose StudentNest',
+    body: 'Compare available property information in one place, narrow options with search filters, and open listing details when you want to learn more. StudentNest makes it more convenient to explore accommodation choices.'
   }
 ];
 
@@ -39,7 +39,7 @@ const questions = [
     answer: 'Availability can change. Review the property details and contact the listed agent or owner to confirm current information before making arrangements.'
   },
   {
-    question: 'How do I contact FAMS support?',
+    question: 'How do I contact StudentNest support?',
     answer: 'Use the Contact Us page to send an inquiry or reach us by phone, WhatsApp, or email.'
   }
 ];
@@ -47,10 +47,10 @@ const questions = [
 const AboutUs = () => (
   <section className="mx-auto max-w-5xl space-y-8">
     <header className="rounded-3xl bg-gradient-to-br from-primary/10 via-white to-white p-6 shadow-card ring-1 ring-slate-200 sm:p-10">
-      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">About FAMS</p>
-      <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Welcome to FAMS</h1>
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">About StudentNest</p>
+      <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Welcome to StudentNest</h1>
       <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-        FAMS is an accommodation platform designed to help the Federal University of Lafia community explore housing options and connect with property owners and agents.
+        StudentNest is an accommodation platform designed to help the Federal University of Lafia community explore housing options and connect with property owners and agents.
       </p>
     </header>
 

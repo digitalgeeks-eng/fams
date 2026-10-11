@@ -53,7 +53,7 @@ const Login = () => {
       <div className="overflow-hidden rounded-2xl sm:rounded-3xl bg-white p-6 sm:p-8 shadow-card ring-1 ring-slate-200">
         <div className="mb-6 sm:mb-8 space-y-2 sm:space-y-3">
           <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-secondary">Welcome back</p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-950">Login to your account</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-950">Login to StudentNest</h1>
           <p className="text-xs sm:text-sm text-slate-500">Access student or agent dashboards with a secure login.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">

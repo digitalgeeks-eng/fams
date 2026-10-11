@@ -1,6 +1,8 @@
-# FULAFIA Accommodation Management System (AMS)
+# StudentNest
 
-Enterprise-level accommodation management system for students, agents, and administrators.
+Find Your Next Place to Stay.
+
+Accommodation platform for students, agents, and administrators, initially serving the Federal University of Lafia community.
 
 ## Features
 - Student registration, search, booking, online/offline payments, complaints, recommendations
