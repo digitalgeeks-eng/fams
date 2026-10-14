@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { formatNairaAmount } from '../utils/propertyCommission.js';
 
 const AgentDashboard = () => {
   const [data, setData] = useState({ properties: [], bookings: [] });
@@ -57,6 +58,14 @@ const AgentDashboard = () => {
               <li key={property._id} className="rounded-3xl border border-slate-200 p-4">
                 <p className="font-semibold">{property.title}</p>
                 <p className="text-slate-600">Status: {property.approvalStatus}</p>
+                {property.commissionEstimate && (
+                  <p className="mt-2 text-sm text-slate-600">
+                    Estimated StudentNest commission: {formatNairaAmount(property.commissionEstimate.studentNestCommission)}
+                    <br />
+                    Estimated agent amount: {formatNairaAmount(property.commissionEstimate.agentAmount)}
+                    <span className="mt-1 block text-xs text-slate-500">Estimate only; not earned or paid.</span>
+                  </p>
+                )}
               </li>
             )) : <p className="text-slate-600">No listings yet.</p>}
           </ul>

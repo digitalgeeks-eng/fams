@@ -9,6 +9,7 @@ import AdminActivity from '../models/AdminActivity.js';
 import { recordAdminActivity } from '../utils/adminActivity.js';
 import { ADMIN_LOCATIONS, adminAccessMessage, getAdminPropertyFilter, isSuperAdmin, normalizeAdminLocation } from '../utils/adminScope.js';
 import { validateEmail, validatePasswordStrength } from '../utils/validators.js';
+import { calculatePropertyCommission } from '../utils/propertyCommission.js';
 
 export const getAnalytics = async (req, res) => {
   const propertyScope = getAdminPropertyFilter(req.user);
@@ -76,7 +77,13 @@ export const listPropertiesAdmin = async (req, res) => {
     .populate('agentId', 'name email')
     .populate('deletedBy', 'name email')
     .sort({ createdAt: -1 });
-  res.json({ data: properties });
+  const data = isSuperAdmin(req.user)
+    ? properties.map((property) => ({
+      ...(typeof property.toObject === 'function' ? property.toObject() : property),
+      commissionEstimate: calculatePropertyCommission(property.price)
+    }))
+    : properties;
+  res.json({ data });
 };
 
 export const approveProperty = async (req, res) => {

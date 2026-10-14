@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { getImageUrl } from '../utils/imageUtils.js';
+import { formatNairaAmount } from '../utils/propertyCommission.js';
 
 const PropertyApproval = () => {
   const [properties, setProperties] = useState([]);
@@ -106,6 +107,14 @@ const PropertyApproval = () => {
                       <p className="font-semibold text-lg">{property.title}</p>
                       <p className="text-slate-600">Agent: {property.agentId?.name || 'Unknown'}</p>
                       <p className="text-slate-600">Approval status: {property.approvalStatus}</p>
+                      {property.commissionEstimate && (
+                        <p className="text-slate-600">
+                          Estimated StudentNest commission: {formatNairaAmount(property.commissionEstimate.studentNestCommission)}
+                          <br />
+                          Estimated agent amount: {formatNairaAmount(property.commissionEstimate.agentAmount)}
+                          <span className="mt-1 block text-xs text-slate-500">Estimate only; not earned or paid.</span>
+                        </p>
+                      )}
                       <p className="text-slate-600">Deleted: {property.isDeleted ? 'Yes' : 'No'}</p>
                       <p className="text-slate-600">Availability: {(property.isUnavailable || property.availabilityStatus === 'not_available') ? 'Not Available' : 'Available'}</p>
                       {(property.isUnavailable || property.availabilityStatus === 'not_available') && property.availabilityReason && (
@@ -147,6 +156,9 @@ const PropertyApproval = () => {
                         <p className="text-slate-700"><span className="font-semibold">Location:</span> {property.location}</p>
                         <p className="text-slate-700"><span className="font-semibold">Type:</span> {property.type}</p>
                         <p className="text-slate-700"><span className="font-semibold">Price:</span> ₦{property.price?.toLocaleString()}</p>
+                        {property.commissionEstimate && (
+                          <p className="text-slate-700"><span className="font-semibold">Estimated StudentNest commission:</span> {formatNairaAmount(property.commissionEstimate.studentNestCommission)}</p>
+                        )}
                         <p className="text-slate-700"><span className="font-semibold">Submitted:</span> {new Date(property.createdAt).toLocaleDateString()}</p>
                       </div>
                       <div className="mt-3 border-t border-slate-200 pt-3">

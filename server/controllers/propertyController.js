@@ -6,6 +6,7 @@ import { updateRecommendationData } from '../services/recommendationService.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { normalizePropertyLocation } from '../utils/locations.js';
 import { parseInspectionFee } from '../utils/inspectionFee.js';
+import { calculatePropertyCommission } from '../utils/propertyCommission.js';
 import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
 import { recordAdminActivity } from '../utils/adminActivity.js';
 
@@ -99,8 +100,12 @@ export const createProperty = async (req, res) => {
     adminContactLinkedin
   } = req.body;
   const savedLocation = normalizePropertyLocation({ location, customLocation });
-  if (!title || !description || !savedLocation || !type || !price) {
+  if (!title || !description || !savedLocation || !type || price === undefined || price === null || String(price).trim() === '') {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
+  }
+  const commissionEstimate = calculatePropertyCommission(price);
+  if (!commissionEstimate) {
+    return res.status(400).json({ message: 'Please enter a valid property price of 0 or more.' });
   }
   const hasInspectionFee = submittedInspectionFee !== undefined
     && submittedInspectionFee !== null
@@ -132,7 +137,7 @@ export const createProperty = async (req, res) => {
     location: savedLocation,
     locationCategory,
     type,
-    price,
+    price: commissionEstimate.propertyPrice,
     inspectionFee,
     images,
     videos,
@@ -150,7 +155,11 @@ export const createProperty = async (req, res) => {
       linkedin: adminContactLinkedin || ''
     }
   });
-  res.status(201).json({ message: 'Property created successfully', data: property });
+  const serializedProperty = typeof property.toObject === 'function' ? property.toObject() : property;
+  const data = req.user.role === 'agent' || isSuperAdmin(req.user)
+    ? { ...serializedProperty, commissionEstimate }
+    : property;
+  res.status(201).json({ message: 'Property created successfully', data });
 };
 
 export const updateProperty = async (req, res) => {
@@ -167,6 +176,13 @@ export const updateProperty = async (req, res) => {
   const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
   const updates = { approvalStatus: 'pending' };
   const changes = [];
+  let commissionEstimate;
+  if (req.body.price !== undefined) {
+    commissionEstimate = calculatePropertyCommission(req.body.price);
+    if (!commissionEstimate) {
+      return res.status(400).json({ message: 'Please enter a valid property price of 0 or more.' });
+    }
+  }
   if (req.body.inspectionFee !== undefined) {
     const submittedInspectionFee = req.body.inspectionFee;
     const hasInspectionFee = submittedInspectionFee !== null
@@ -207,6 +223,8 @@ export const updateProperty = async (req, res) => {
       ? (req.body[field] ? new Date(req.body[field]) : undefined)
       : field === 'location'
         ? normalizePropertyLocation({ location: req.body[field], customLocation: req.body.customLocation })
+        : field === 'price'
+          ? commissionEstimate.propertyPrice
         : req.body[field];
     if (field === 'location' && !newValue) return;
     const oldValue = property[field];
@@ -263,7 +281,13 @@ export const updateProperty = async (req, res) => {
     });
     if (req.user.role === 'admin') await recordAdminActivity(req.user, 'property_edited', `Property ${property.title} was edited.`, { propertyId: property._id, propertyLocation: updatedProperty.location });
   }
-  res.json({ message: 'Property updated and sent for approval', data: updatedProperty });
+  const serializedProperty = typeof updatedProperty.toObject === 'function' ? updatedProperty.toObject() : updatedProperty;
+  const resultingPrice = commissionEstimate?.propertyPrice ?? updatedProperty.price ?? property.price;
+  const estimate = calculatePropertyCommission(resultingPrice);
+  const data = req.user.role === 'agent' || isSuperAdmin(req.user)
+    ? { ...serializedProperty, commissionEstimate: estimate }
+    : updatedProperty;
+  res.json({ message: 'Property updated and sent for approval', data });
 };
 
 export const rateProperty = async (req, res) => {
@@ -337,7 +361,12 @@ export const deleteProperty = async (req, res) => {
 
 export const getAgentProperties = async (req, res) => {
   const properties = await Property.find({ agentId: req.user._id, isDeleted: { $ne: true } }).sort({ createdAt: -1 });
-  res.json({ data: properties });
+  res.json({
+    data: properties.map((property) => ({
+      ...(typeof property.toObject === 'function' ? property.toObject() : property),
+      commissionEstimate: calculatePropertyCommission(property.price)
+    }))
+  });
 };
 
 export const getDeletedProperties = async (req, res) => {

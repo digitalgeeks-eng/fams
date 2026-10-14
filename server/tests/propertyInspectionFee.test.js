@@ -93,6 +93,9 @@ test('property creation accepts an omitted fee and stores paid or free fees per 
     }, withoutFeeResponse);
     assert.equal(withoutFeeResponse.statusCode, 201);
     assert.equal(withoutFeeResponse.body.data.inspectionFee, null);
+    assert.equal(withoutFeeResponse.body.data.commissionEstimate.studentNestCommission, 3600);
+    assert.equal(withoutFeeResponse.body.data.commissionEstimate.agentAmount, 116400);
+    assert.equal(Object.hasOwn(createdProperties[0], 'commissionEstimate'), false);
 
     for (const inspectionFee of ['3000', '0']) {
       const response = makeResponse();
@@ -103,7 +106,9 @@ test('property creation accepts an omitted fee and stores paid or free fees per 
       }, response);
       assert.equal(response.statusCode, 201);
       assert.equal(response.body.data.inspectionFee, Number(inspectionFee));
+      assert.equal(response.body.data.commissionEstimate.studentNestCommission, 3600);
       assert.equal(createdProperties.at(-1).agentId, agent._id);
+      assert.equal(Object.hasOwn(createdProperties.at(-1), 'commissionEstimate'), false);
     }
     assert.notEqual(createdProperties[0]._id, createdProperties[1]._id);
     assert.notEqual(createdProperties[1]._id, createdProperties[2]._id);

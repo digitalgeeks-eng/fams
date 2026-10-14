@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api.js';
 import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
+import { calculatePropertyCommission, formatNairaAmount } from '../utils/propertyCommission.js';
 
 const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'];
 
@@ -30,6 +31,7 @@ const AddProperty = () => {
   const [videos, setVideos] = useState([]);
   const [existingMediaCount, setExistingMediaCount] = useState(0);
   const [message, setMessage] = useState('');
+  const commissionEstimate = calculatePropertyCommission(form.price);
 
   useEffect(() => {
     if (!id) return;
@@ -138,7 +140,30 @@ const AddProperty = () => {
             <option key={houseType} value={houseType}>{houseType}</option>
           ))}
         </select>
-        <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price" type="number" className="w-full border border-slate-300 rounded-2xl px-4 py-3" required />
+        <label className="block">
+          <span className="block text-sm font-medium text-slate-700">Property rental price (₦)</span>
+          <input
+            value={form.price}
+            onChange={(e) => setForm({ ...form, price: e.target.value })}
+            placeholder="Price"
+            type="number"
+            min="0"
+            step="0.01"
+            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3"
+            required
+          />
+        </label>
+        {commissionEstimate && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-live="polite">
+            <h2 className="font-semibold text-slate-800">Estimated commission breakdown</h2>
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+              <p className="text-slate-600">Property rental price <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.propertyPrice)}</span></p>
+              <p className="text-slate-600">StudentNest commission (3%) <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.studentNestCommission)}</span></p>
+              <p className="text-slate-600">Agent expected amount (97%) <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.agentAmount)}</span></p>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Estimate only. No commission is deducted or earned when a listing is created.</p>
+          </div>
+        )}
         <label className="block">
           <span className="block text-sm font-medium text-slate-700">Inspection Fee (₦)</span>
           <input
