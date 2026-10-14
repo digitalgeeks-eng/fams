@@ -1,0 +1,10 @@
+ README.md                            |  18 [32m++[m
+ client/src/context/AuthContext.jsx   |  16 [32m+[m[31m-[m
+ client/src/pages/Register.jsx        | 187 [32m++++++++++[m[31m-----[m
+ server/controllers/authController.js | 452 [32m+++++++++++++++++++++++++++++++[m[31m----[m
+ server/middleware/rateLimiter.js     |   2 [32m+[m
+ server/models/EmailVerification.js   |  10 [32m+[m[31m-[m
+ server/models/User.js                |   1 [32m+[m
+ server/routes/authRoutes.js          |   6 [32m+[m[31m-[m
+ server/services/emailService.js      |  60 [32m++++[m[31m-[m
+ 9 files changed, 636 insertions(+), 116 deletions(-)
