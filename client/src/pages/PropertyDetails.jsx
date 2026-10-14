@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth.jsx';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { getImageUrl } from '../utils/imageUtils.js';
+import { formatInspectionFee } from '../utils/inspectionFee.js';
 
 const PropertyDetails = () => {
   const { id } = useParams();
@@ -98,6 +99,7 @@ const PropertyDetails = () => {
   const canBook = property?.approvalStatus === 'approved' && !isUnavailable;
   const currentImageUrl = getImageUrl(property?.images?.[activeIndex]);
   const hasMultipleImages = property?.images?.length > 1;
+  const formattedInspectionFee = formatInspectionFee(property?.inspectionFee);
 
   return (
     <section className="grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -185,6 +187,9 @@ const PropertyDetails = () => {
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Location: {property.location}</span>
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Type: {property.type}</span>
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Price: ₦{property.price.toLocaleString()}</span>
+          {formattedInspectionFee && (
+            <span className="rounded-3xl border border-slate-200 px-4 py-3">Inspection Fee: {formattedInspectionFee}</span>
+          )}
           <span className="rounded-3xl border border-slate-200 px-4 py-3">Status: {isUnavailable ? 'Not Available' : property.approvalStatus}</span>
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-3">

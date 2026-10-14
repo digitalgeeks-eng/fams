@@ -5,6 +5,7 @@ import PropertyEditHistory from '../models/PropertyEditHistory.js';
 import { updateRecommendationData } from '../services/recommendationService.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { normalizePropertyLocation } from '../utils/locations.js';
+import { parseInspectionFee } from '../utils/inspectionFee.js';
 import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
 import { recordAdminActivity } from '../utils/adminActivity.js';
 
@@ -86,6 +87,7 @@ export const createProperty = async (req, res) => {
     customLocation,
     type,
     price,
+    inspectionFee: submittedInspectionFee,
     visibleUntil,
     adminContactName,
     adminContactEmail,
@@ -99,6 +101,13 @@ export const createProperty = async (req, res) => {
   const savedLocation = normalizePropertyLocation({ location, customLocation });
   if (!title || !description || !savedLocation || !type || !price) {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
+  }
+  const hasInspectionFee = submittedInspectionFee !== undefined
+    && submittedInspectionFee !== null
+    && String(submittedInspectionFee).trim() !== '';
+  const inspectionFee = hasInspectionFee ? parseInspectionFee(submittedInspectionFee) : null;
+  if (hasInspectionFee && inspectionFee === null) {
+    return res.status(400).json({ message: 'Please enter a valid inspection fee of 0 or more.' });
   }
   const locationCategory = String(location).trim().toLowerCase() === 'other'
     ? 'Other'
@@ -124,6 +133,7 @@ export const createProperty = async (req, res) => {
     locationCategory,
     type,
     price,
+    inspectionFee,
     images,
     videos,
     availabilityStatus: 'available',
@@ -157,6 +167,20 @@ export const updateProperty = async (req, res) => {
   const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
   const updates = { approvalStatus: 'pending' };
   const changes = [];
+  if (req.body.inspectionFee !== undefined) {
+    const submittedInspectionFee = req.body.inspectionFee;
+    const hasInspectionFee = submittedInspectionFee !== null
+      && String(submittedInspectionFee).trim() !== '';
+    const inspectionFee = hasInspectionFee ? parseInspectionFee(submittedInspectionFee) : null;
+    if (hasInspectionFee && inspectionFee === null) {
+      return res.status(400).json({ message: 'Please enter a valid inspection fee of 0 or more.' });
+    }
+    const oldValue = property.inspectionFee ?? null;
+    if (oldValue !== inspectionFee) {
+      changes.push({ field: 'inspectionFee', oldValue, newValue: inspectionFee });
+      updates.inspectionFee = inspectionFee;
+    }
+  }
   if (req.body.location !== undefined && String(req.body.location).trim().toLowerCase() === 'other' && !String(req.body.customLocation || '').trim()) {
     return res.status(400).json({ message: 'Please enter the location.' });
   }

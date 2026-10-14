@@ -15,6 +15,15 @@ const propertySchema = new mongoose.Schema({
   locationCategory: { type: String, trim: true, index: true },
   type: { type: String, enum: ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'], required: true },
   price: { type: Number, required: true },
+  inspectionFee: {
+    type: Number,
+    default: null,
+    min: 0,
+    validate: {
+      validator: (value) => value === null || Number.isFinite(value),
+      message: 'Inspection fee must be a finite number.'
+    }
+  },
   images: [{ type: mongoose.Schema.Types.Mixed }],
   videos: [{ type: mongoose.Schema.Types.Mixed }],
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

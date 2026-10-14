@@ -15,6 +15,7 @@ const AddProperty = () => {
     customLocation: '',
     type: '',
     price: '',
+    inspectionFee: '',
     visibleUntil: '',
     adminContactName: '',
     adminContactEmail: '',
@@ -47,6 +48,7 @@ const AddProperty = () => {
           customLocation: isPredefined ? '' : property.location || '',
           type: property.type || '',
           price: property.price || '',
+          inspectionFee: property.inspectionFee == null ? '' : String(property.inspectionFee),
           visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : ''
         }));
       } catch (err) {
@@ -58,6 +60,13 @@ const AddProperty = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const inspectionFeeValue = form.inspectionFee.trim();
+    const inspectionFee = inspectionFeeValue === '' ? null : Number(inspectionFeeValue);
+    if (inspectionFeeValue !== '' && (!Number.isFinite(inspectionFee) || inspectionFee < 0)) {
+      setMessage('Enter a valid inspection fee of 0 or more. Enter 0 if inspection is free.');
+      return;
+    }
+
     const totalSelectedMedia = images.length + videos.length;
     const totalMedia = totalSelectedMedia + existingMediaCount;
 
@@ -73,6 +82,7 @@ const AddProperty = () => {
     if (form.location === 'Other') data.append('customLocation', form.customLocation.trim());
     data.append('type', form.type);
     data.append('price', form.price);
+    data.append('inspectionFee', inspectionFee === null ? '' : String(inspectionFee));
     if (form.visibleUntil) data.append('visibleUntil', form.visibleUntil);
     if (form.adminContactName) data.append('adminContactName', form.adminContactName);
     if (form.adminContactEmail) data.append('adminContactEmail', form.adminContactEmail);
@@ -87,7 +97,14 @@ const AddProperty = () => {
     try {
       await api[isEditMode ? 'put' : 'post'](isEditMode ? `/properties/${id}` : '/properties', data);
       setMessage(isEditMode ? 'Property updated successfully and sent for approval' : 'Property created successfully and awaiting admin approval');
-      setForm({ title: '', description: '', location: '', customLocation: '', type: '', price: '', visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '', adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '', adminContactTwitter: '', adminContactLinkedin: '' });
+      if (!isEditMode) {
+        setForm({
+          title: '', description: '', location: '', customLocation: '', type: '', price: '', inspectionFee: '',
+          visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '',
+          adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '',
+          adminContactTwitter: '', adminContactLinkedin: ''
+        });
+      }
       setImages([]);
       setVideos([]);
       setExistingMediaCount(0);
@@ -122,6 +139,21 @@ const AddProperty = () => {
           ))}
         </select>
         <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Price" type="number" className="w-full border border-slate-300 rounded-2xl px-4 py-3" required />
+        <label className="block">
+          <span className="block text-sm font-medium text-slate-700">Inspection Fee (₦)</span>
+          <input
+            value={form.inspectionFee}
+            onChange={(e) => setForm({ ...form, inspectionFee: e.target.value })}
+            placeholder="Enter inspection fee (e.g. 3000)"
+            type="number"
+            min="0"
+            step="any"
+            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3"
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            Enter the amount a user will pay to inspect this property. Enter 0 if inspection is free.
+          </span>
+        </label>
         <label className="block text-sm font-medium text-slate-700">Visible until</label>
         <input
           type="datetime-local"
