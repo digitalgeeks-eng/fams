@@ -3,6 +3,7 @@ import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { getImageUrl } from '../utils/imageUtils.js';
 import { formatNairaAmount } from '../utils/propertyCommission.js';
+import { getLegacyContactConflict, getPropertyContactPhone } from '../utils/propertyContact.js';
 
 const PropertyApproval = () => {
   const [properties, setProperties] = useState([]);
@@ -165,6 +166,13 @@ const PropertyApproval = () => {
                         <p className="font-semibold text-slate-800">Agent details</p>
                         <p className="text-slate-700">Name: {property.agentId?.name || 'Unknown'}</p>
                         <p className="text-slate-700">Email: {property.agentId?.email || 'Unknown'}</p>
+                        <p className="text-slate-700">WhatsApp / Phone Number: {getPropertyContactPhone(property.adminContact) || 'Not provided'}</p>
+                        {getLegacyContactConflict(property.adminContact) && (
+                          <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                            Legacy phone and WhatsApp values differ. Both values are preserved.
+                            <span className="mt-1 block">Phone: {property.adminContact.phone} · WhatsApp: {property.adminContact.whatsapp}</span>
+                          </p>
+                        )}
                       </div>
                       {property.images?.length > 0 && (
                         <div className="mt-4 grid gap-2 sm:grid-cols-2">

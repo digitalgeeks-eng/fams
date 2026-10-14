@@ -28,6 +28,7 @@ const propertySchema = new mongoose.Schema({
   videos: [{ type: mongoose.Schema.Types.Mixed }],
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   adminContact: {
+    contactPhone: { type: String, trim: true },
     name: { type: String, trim: true },
     email: { type: String, trim: true },
     phone: { type: String, trim: true },

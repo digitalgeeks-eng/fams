@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import api from '../services/api.js';
 import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
 import { calculatePropertyCommission, formatNairaAmount } from '../utils/propertyCommission.js';
+import { getLegacyContactConflict, getPropertyContactPhone } from '../utils/propertyContact.js';
 
 const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'];
 
@@ -18,19 +19,13 @@ const AddProperty = () => {
     price: '',
     inspectionFee: '',
     visibleUntil: '',
-    adminContactName: '',
-    adminContactEmail: '',
-    adminContactPhone: '',
-    adminContactWhatsapp: '',
-    adminContactFacebook: '',
-    adminContactInstagram: '',
-    adminContactTwitter: '',
-    adminContactLinkedin: ''
+    contactPhone: ''
   });
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
   const [existingMediaCount, setExistingMediaCount] = useState(0);
   const [message, setMessage] = useState('');
+  const [legacyContactConflict, setLegacyContactConflict] = useState(null);
   const commissionEstimate = calculatePropertyCommission(form.price);
 
   useEffect(() => {
@@ -42,6 +37,7 @@ const AddProperty = () => {
         setExistingMediaCount((property.images?.length || 0) + (property.videos?.length || 0));
         const displayedLocation = LEGACY_LOCATION_ALIASES[property.location] || property.location || '';
         const isPredefined = LOCATIONS.includes(displayedLocation) && displayedLocation !== 'Other';
+        setLegacyContactConflict(getLegacyContactConflict(property.adminContact));
         setForm((current) => ({
           ...current,
           title: property.title || '',
@@ -51,7 +47,8 @@ const AddProperty = () => {
           type: property.type || '',
           price: property.price || '',
           inspectionFee: property.inspectionFee == null ? '' : String(property.inspectionFee),
-          visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : ''
+          visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : '',
+          contactPhone: getPropertyContactPhone(property.adminContact)
         }));
       } catch (err) {
         setMessage(err.response?.data?.message || 'Could not load property');
@@ -85,15 +82,8 @@ const AddProperty = () => {
     data.append('type', form.type);
     data.append('price', form.price);
     data.append('inspectionFee', inspectionFee === null ? '' : String(inspectionFee));
-    if (form.visibleUntil) data.append('visibleUntil', form.visibleUntil);
-    if (form.adminContactName) data.append('adminContactName', form.adminContactName);
-    if (form.adminContactEmail) data.append('adminContactEmail', form.adminContactEmail);
-    if (form.adminContactPhone) data.append('adminContactPhone', form.adminContactPhone);
-    if (form.adminContactWhatsapp) data.append('adminContactWhatsapp', form.adminContactWhatsapp);
-    if (form.adminContactFacebook) data.append('adminContactFacebook', form.adminContactFacebook);
-    if (form.adminContactInstagram) data.append('adminContactInstagram', form.adminContactInstagram);
-    if (form.adminContactTwitter) data.append('adminContactTwitter', form.adminContactTwitter);
-    if (form.adminContactLinkedin) data.append('adminContactLinkedin', form.adminContactLinkedin);
+    data.append('visibleUntil', form.visibleUntil);
+    data.append('contactPhone', form.contactPhone.trim());
     images.forEach((file) => data.append('images', file));
     videos.forEach((file) => data.append('videos', file));
     try {
@@ -102,10 +92,9 @@ const AddProperty = () => {
       if (!isEditMode) {
         setForm({
           title: '', description: '', location: '', customLocation: '', type: '', price: '', inspectionFee: '',
-          visibleUntil: '', adminContactName: '', adminContactEmail: '', adminContactPhone: '',
-          adminContactWhatsapp: '', adminContactFacebook: '', adminContactInstagram: '',
-          adminContactTwitter: '', adminContactLinkedin: ''
+          visibleUntil: '', contactPhone: ''
         });
+        setLegacyContactConflict(null);
       }
       setImages([]);
       setVideos([]);
@@ -179,86 +168,40 @@ const AddProperty = () => {
             Enter the amount a user will pay to inspect this property. Enter 0 if inspection is free.
           </span>
         </label>
-        <label className="block text-sm font-medium text-slate-700">Visible until</label>
-        <input
-          type="datetime-local"
-          value={form.visibleUntil}
-          onChange={(e) => setForm({ ...form, visibleUntil: e.target.value })}
-          className="w-full border border-slate-300 rounded-2xl px-4 py-3"
-        />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Admin contact name</label>
+        <label className="block">
+          <span className="block text-sm font-medium text-slate-700">Visible Until (Optional)</span>
+          <input
+            type="datetime-local"
+            value={form.visibleUntil}
+            onChange={(e) => setForm({ ...form, visibleUntil: e.target.value })}
+            className="mt-2 w-full border border-slate-300 rounded-2xl px-4 py-3"
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            Optional: Choose when this property listing should stop being visible. Leave blank if you do not want to set an expiration date.
+          </span>
+        </label>
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <label className="block">
+            <span className="block text-sm font-medium text-slate-700">WhatsApp / Phone Number</span>
             <input
-              value={form.adminContactName}
-              onChange={(e) => setForm({ ...form, adminContactName: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Full name"
+              type="tel"
+              inputMode="tel"
+              pattern="(?:0[789][01][0-9]{8}|[+]234[789][01][0-9]{8})"
+              value={form.contactPhone}
+              onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+              placeholder="08123456789 or +2348123456789"
+              className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Admin contact email</label>
-            <input
-              value={form.adminContactEmail}
-              onChange={(e) => setForm({ ...form, adminContactEmail: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Email address"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Phone</label>
-            <input
-              value={form.adminContactPhone}
-              onChange={(e) => setForm({ ...form, adminContactPhone: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Phone number"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Whatsapp</label>
-            <input
-              value={form.adminContactWhatsapp}
-              onChange={(e) => setForm({ ...form, adminContactWhatsapp: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Whatsapp link or number"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Facebook</label>
-            <input
-              value={form.adminContactFacebook}
-              onChange={(e) => setForm({ ...form, adminContactFacebook: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Facebook URL"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Instagram</label>
-            <input
-              value={form.adminContactInstagram}
-              onChange={(e) => setForm({ ...form, adminContactInstagram: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Instagram URL"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Twitter</label>
-            <input
-              value={form.adminContactTwitter}
-              onChange={(e) => setForm({ ...form, adminContactTwitter: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="Twitter URL"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">LinkedIn</label>
-            <input
-              value={form.adminContactLinkedin}
-              onChange={(e) => setForm({ ...form, adminContactLinkedin: e.target.value })}
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3"
-              placeholder="LinkedIn URL"
-            />
-          </div>
+          </label>
+          <span className="mt-1 block text-xs text-slate-500">
+            This number is visible only to authorized administrators.
+          </span>
+          {legacyContactConflict && (
+            <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900" role="status">
+              This property has different legacy contact values. The current contact number is shown above; both saved legacy values are being preserved.
+              <span className="mt-1 block">Legacy phone: {legacyContactConflict.phone} · Legacy WhatsApp: {legacyContactConflict.whatsapp}</span>
+            </div>
+          )}
         </div>
         <input type="file" multiple accept="image/*" onChange={(e) => setImages([...e.target.files])} className="w-full text-slate-600" />
         <input type="file" multiple accept="video/*" onChange={(e) => setVideos([...e.target.files])} className="w-full text-slate-600" />

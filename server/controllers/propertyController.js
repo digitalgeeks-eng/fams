@@ -7,6 +7,7 @@ import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/clo
 import { normalizePropertyLocation } from '../utils/locations.js';
 import { parseInspectionFee } from '../utils/inspectionFee.js';
 import { calculatePropertyCommission } from '../utils/propertyCommission.js';
+import { getPropertyContactNumber, normalizeNigerianPhoneNumber } from '../utils/propertyContact.js';
 import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
 import { recordAdminActivity } from '../utils/adminActivity.js';
 
@@ -57,6 +58,7 @@ export const listProperties = async (req, res) => {
   }
 
   const properties = await Property.find(filter)
+    .select('-adminContact')
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));
@@ -77,7 +79,12 @@ export const getProperty = async (req, res) => {
   if (req.user?.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
     return res.status(403).json({ message: adminAccessMessage });
   }
-  res.json({ data: property });
+  const agentId = property.agentId?._id || property.agentId;
+  const canViewPrivateContact = req.user?.role === 'admin'
+    || (req.user?.role === 'agent' && agentId?.toString() === req.user._id.toString());
+  const data = typeof property.toObject === 'function' ? property.toObject() : { ...property };
+  if (!canViewPrivateContact) delete data.adminContact;
+  res.json({ data });
 };
 
 export const createProperty = async (req, res) => {
@@ -90,14 +97,7 @@ export const createProperty = async (req, res) => {
     price,
     inspectionFee: submittedInspectionFee,
     visibleUntil,
-    adminContactName,
-    adminContactEmail,
-    adminContactPhone,
-    adminContactWhatsapp,
-    adminContactFacebook,
-    adminContactInstagram,
-    adminContactTwitter,
-    adminContactLinkedin
+    contactPhone: submittedContactPhone
   } = req.body;
   const savedLocation = normalizePropertyLocation({ location, customLocation });
   if (!title || !description || !savedLocation || !type || price === undefined || price === null || String(price).trim() === '') {
@@ -113,6 +113,15 @@ export const createProperty = async (req, res) => {
   const inspectionFee = hasInspectionFee ? parseInspectionFee(submittedInspectionFee) : null;
   if (hasInspectionFee && inspectionFee === null) {
     return res.status(400).json({ message: 'Please enter a valid inspection fee of 0 or more.' });
+  }
+  const contactPhone = String(submittedContactPhone || '').trim();
+  if (contactPhone && !normalizeNigerianPhoneNumber(contactPhone)) {
+    return res.status(400).json({ message: 'Enter a valid Nigerian phone number, such as 08123456789 or +2348123456789.' });
+  }
+  const hasVisibleUntil = visibleUntil !== undefined && visibleUntil !== null && String(visibleUntil).trim() !== '';
+  const parsedVisibleUntil = hasVisibleUntil ? new Date(visibleUntil) : null;
+  if (hasVisibleUntil && Number.isNaN(parsedVisibleUntil.getTime())) {
+    return res.status(400).json({ message: 'Please enter a valid visibility expiration date.' });
   }
   const locationCategory = String(location).trim().toLowerCase() === 'other'
     ? 'Other'
@@ -142,17 +151,10 @@ export const createProperty = async (req, res) => {
     images,
     videos,
     availabilityStatus: 'available',
-    visibleUntil: visibleUntil ? new Date(visibleUntil) : null,
+    visibleUntil: parsedVisibleUntil,
     agentId: req.user._id,
     adminContact: {
-      name: adminContactName || '',
-      email: adminContactEmail || '',
-      phone: adminContactPhone || '',
-      whatsapp: adminContactWhatsapp || '',
-      facebook: adminContactFacebook || '',
-      instagram: adminContactInstagram || '',
-      twitter: adminContactTwitter || '',
-      linkedin: adminContactLinkedin || ''
+      contactPhone
     }
   });
   const serializedProperty = typeof property.toObject === 'function' ? property.toObject() : property;
@@ -181,6 +183,18 @@ export const updateProperty = async (req, res) => {
     commissionEstimate = calculatePropertyCommission(req.body.price);
     if (!commissionEstimate) {
       return res.status(400).json({ message: 'Please enter a valid property price of 0 or more.' });
+    }
+  }
+  if (req.body.visibleUntil !== undefined
+    && req.body.visibleUntil !== null
+    && String(req.body.visibleUntil).trim() !== ''
+    && Number.isNaN(new Date(req.body.visibleUntil).getTime())) {
+    return res.status(400).json({ message: 'Please enter a valid visibility expiration date.' });
+  }
+  if (req.body.contactPhone !== undefined) {
+    const contactPhone = String(req.body.contactPhone || '').trim();
+    if (contactPhone && !normalizeNigerianPhoneNumber(contactPhone)) {
+      return res.status(400).json({ message: 'Enter a valid Nigerian phone number, such as 08123456789 or +2348123456789.' });
     }
   }
   if (req.body.inspectionFee !== undefined) {
@@ -220,7 +234,7 @@ export const updateProperty = async (req, res) => {
   editableFields.forEach((field) => {
     if (req.body[field] === undefined) return;
     const newValue = field === 'visibleUntil'
-      ? (req.body[field] ? new Date(req.body[field]) : undefined)
+      ? (req.body[field] ? new Date(req.body[field]) : null)
       : field === 'location'
         ? normalizePropertyLocation({ location: req.body[field], customLocation: req.body.customLocation })
         : field === 'price'
@@ -233,21 +247,17 @@ export const updateProperty = async (req, res) => {
       updates[field] = newValue;
     }
   });
-  const contactFields = {
-    name: 'adminContactName', email: 'adminContactEmail', phone: 'adminContactPhone',
-    whatsapp: 'adminContactWhatsapp', facebook: 'adminContactFacebook',
-    instagram: 'adminContactInstagram', twitter: 'adminContactTwitter', linkedin: 'adminContactLinkedin'
-  };
-  const nextContact = { ...property.adminContact?.toObject?.(), ...property.adminContact?.toObject?.() };
-  Object.entries(contactFields).forEach(([field, requestField]) => {
-    if (req.body[requestField] === undefined) return;
-    const newValue = req.body[requestField] || '';
-    if ((property.adminContact?.[field] || '') !== newValue) {
-      changes.push({ field: `adminContact.${field}`, oldValue: property.adminContact?.[field] || '', newValue });
-      nextContact[field] = newValue;
+  const nextContact = { ...(property.adminContact?.toObject?.() || property.adminContact || {}) };
+  const submittedContactPhone = req.body.contactPhone;
+  if (submittedContactPhone !== undefined) {
+    const newValue = String(submittedContactPhone || '').trim();
+    const oldValue = getPropertyContactNumber({ adminContact: nextContact });
+    if (oldValue !== newValue || nextContact.contactPhone === undefined) {
+      changes.push({ field: 'adminContact.contactPhone', oldValue, newValue });
+      nextContact.contactPhone = newValue;
+      updates.adminContact = nextContact;
     }
-  });
-  if (Object.keys(nextContact).length) updates.adminContact = nextContact;
+  }
 
   let nextImages = property.images || [];
   let nextVideos = property.videos || [];
@@ -327,7 +337,9 @@ export const rateProperty = async (req, res) => {
   property.averageRating = property.ratings.reduce((sum, item) => sum + item.rating, 0) / property.ratingCount;
   await property.save();
 
-  res.json({ message: 'Rating submitted successfully', data: property });
+  const data = typeof property.toObject === 'function' ? property.toObject() : { ...property };
+  delete data.adminContact;
+  res.json({ message: 'Rating submitted successfully', data });
 };
 
 export const deleteProperty = async (req, res) => {
