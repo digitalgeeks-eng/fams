@@ -32,12 +32,21 @@ const registrationCodeMatches = (email, code, storedHash) => {
   return providedHash.length === expectedHash.length && crypto.timingSafeEqual(providedHash, expectedHash);
 };
 
+const getPendingImageBuffer = (image) => {
+  if (Buffer.isBuffer(image)) return image;
+  if (image?._bsontype === 'Binary' && typeof image.value === 'function') {
+    const buffer = image.value(true);
+    if (Buffer.isBuffer(buffer)) return buffer;
+  }
+  throw new TypeError('Pending registration image data is not valid binary data.');
+};
+
 const uploadPendingRegistrationImages = async (registrationData) => {
   const uploadedAssets = [];
   const userImages = {};
   try {
     if (registrationData.idImageBuffer) {
-      const result = await uploadBufferToCloudinary(registrationData.idImageBuffer, {
+      const result = await uploadBufferToCloudinary(getPendingImageBuffer(registrationData.idImageBuffer), {
         folder: 'fulafia-ams/agents/identity',
         resourceType: 'image'
       });
@@ -45,7 +54,7 @@ const uploadPendingRegistrationImages = async (registrationData) => {
       userImages.idImage = result.secure_url;
     }
     if (registrationData.licenseImageBuffer) {
-      const result = await uploadBufferToCloudinary(registrationData.licenseImageBuffer, {
+      const result = await uploadBufferToCloudinary(getPendingImageBuffer(registrationData.licenseImageBuffer), {
         folder: 'fulafia-ams/agents/licenses',
         resourceType: 'image'
       });
