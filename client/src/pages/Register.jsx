@@ -432,6 +432,52 @@ const Register = () => {
               />
             </label>
 
+            <div className="rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-xs sm:text-sm font-semibold text-slate-700">Bank / Payment Information</h3>
+                <span className="text-xs text-slate-500">Optional</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs sm:text-sm font-medium text-slate-700">Account Number</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    name="accountNumber"
+                    value={form.accountNumber}
+                    onChange={handleAgentChange}
+                    placeholder="Enter your account number"
+                    autoComplete="off"
+                    className="mt-1.5 sm:mt-2 w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs sm:text-sm font-medium text-slate-700">Bank Name</span>
+                  <input
+                    type="text"
+                    name="bankName"
+                    value={form.bankName}
+                    onChange={handleAgentChange}
+                    placeholder="Enter your bank name"
+                    autoComplete="off"
+                    className="mt-1.5 sm:mt-2 w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="text-xs sm:text-sm font-medium text-slate-700">Account Name</span>
+                  <input
+                    type="text"
+                    name="accountName"
+                    value={form.accountName}
+                    onChange={handleAgentChange}
+                    placeholder="Enter your account name"
+                    autoComplete="off"
+                    className="mt-1.5 sm:mt-2 w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  />
+                </label>
+              </div>
+            </div>
+
             {/* Passport/ID Upload */}
             <div className="rounded-xl sm:rounded-2xl border-2 border-dashed border-slate-300 p-4 sm:p-6">
               <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4">Passport or ID Photo *</p>

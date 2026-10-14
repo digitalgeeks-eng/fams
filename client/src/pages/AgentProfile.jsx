@@ -160,7 +160,8 @@ const AgentProfile = () => {
                   name="accountNumber"
                   value={profile.accountNumber}
                   onChange={handleChange}
-                  placeholder="8106083399"
+                  placeholder="Enter your account number"
+                  inputMode="numeric"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
                 />
                 {profile.accountNumber && (
@@ -172,11 +173,11 @@ const AgentProfile = () => {
             </label>
             <label className="block">
               <span className="text-sm font-medium text-slate-700">Bank Name</span>
-              <input name="bankName" value={profile.bankName} onChange={handleChange} placeholder="Opay" className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3" />
+              <input name="bankName" value={profile.bankName} onChange={handleChange} placeholder="Enter your bank name" className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3" />
             </label>
             <label className="block">
               <span className="text-sm font-medium text-slate-700">Account Name</span>
-              <input name="accountName" value={profile.accountName} onChange={handleChange} placeholder="Miracle Obadiah" className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3" />
+              <input name="accountName" value={profile.accountName} onChange={handleChange} placeholder="Enter your account name" className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3" />
             </label>
           </div>
         </div>
