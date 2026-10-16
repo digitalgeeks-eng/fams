@@ -18,9 +18,12 @@ import adminRoutes from './routes/adminRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
+import { createLaunchModeMiddleware } from './middleware/launchModeMiddleware.js';
 import User from './models/User.js';
+import { getLaunchConfig, getLaunchStatus } from './utils/launchConfig.js';
 
 dotenv.config();
+const launchConfig = getLaunchConfig(process.env);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -50,6 +53,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 // Keep legacy uploads available while new property media is stored in Cloudinary.
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.get('/api/launch-status', (req, res) => {
+  res.json({ data: getLaunchStatus(new Date(), launchConfig) });
+});
+app.use('/api', createLaunchModeMiddleware(launchConfig));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/contact', contactRoutes);

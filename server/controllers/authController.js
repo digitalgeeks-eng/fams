@@ -9,6 +9,8 @@ import { validateBankDetails, validateEmail, validatePasswordStrength, validateR
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { OAuth2Client } from 'google-auth-library';
 import { getEmailDeliveryDiagnostics, sendEmail } from '../services/emailService.js';
+import { isSuperAdmin } from '../utils/adminScope.js';
+import { getLaunchConfig, getLaunchStatus } from '../utils/launchConfig.js';
 
 dotenv.config();
 
@@ -19,6 +21,11 @@ const PENDING_REGISTRATION_TTL_MS = 24 * 60 * 60 * 1000;
 const REGISTRATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_REGISTRATION_CODE_SENDS = 5;
 const MAX_REGISTRATION_CODE_ATTEMPTS = 5;
+
+const isLaunchAccessAllowed = (user) => {
+  const launchStatus = getLaunchStatus(new Date(), getLaunchConfig(process.env));
+  return launchStatus.launched || isSuperAdmin(user);
+};
 
 const hashRegistrationCode = (email, code) => crypto
   .createHmac('sha256', process.env.JWT_SECRET)
@@ -586,6 +593,9 @@ export const login = async (req, res) => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
   if (user.status && user.status !== 'active') return res.status(403).json({ message: `Account is ${user.status}. Contact an administrator.` });
+  if (!isLaunchAccessAllowed(user)) {
+    return res.status(423).json({ message: 'StudentNest is not open yet.', code: 'PRE_LAUNCH' });
+  }
 
   const token = generateToken(user._id);
   user.lastLoginAt = new Date();
@@ -669,6 +679,10 @@ export const googleLogin = async (req, res) => {
   const normalizedEmail = payload.email.trim().toLowerCase();
   let user = await User.findOne({ googleId: payload.sub }).select('+password');
   if (!user) user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+  if (!isLaunchAccessAllowed(user)) {
+    return res.status(423).json({ message: 'StudentNest is not open yet.', code: 'PRE_LAUNCH' });
+  }
 
   if (user) {
     if (user.status && user.status !== 'active') return res.status(403).json({ message: `Account is ${user.status}. Contact an administrator.` });
