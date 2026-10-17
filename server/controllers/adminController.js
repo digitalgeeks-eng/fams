@@ -75,12 +75,15 @@ export const verifyAgent = async (req, res) => {
 export const listPropertiesAdmin = async (req, res) => {
   const properties = await Property.find(getAdminPropertyFilter(req.user))
     .populate('agentId', 'name email')
+    .populate('createdBy', 'name email')
     .populate('deletedBy', 'name email')
     .sort({ createdAt: -1 });
   const data = isSuperAdmin(req.user)
     ? properties.map((property) => ({
       ...(typeof property.toObject === 'function' ? property.toObject() : property),
-      commissionEstimate: calculatePropertyCommission(property.price)
+      ...(property.ownerType !== 'admin' && property.agentId
+        ? { commissionEstimate: calculatePropertyCommission(property.price) }
+        : {})
     }))
     : properties;
   res.json({ data });
@@ -91,6 +94,13 @@ export const approveProperty = async (req, res) => {
   if (!property) return res.status(404).json({ message: 'Property not found' });
   if (!isSuperAdmin(req.user) && !(await Property.exists({ _id: property._id, ...getAdminPropertyFilter(req.user) }))) return res.status(403).json({ message: adminAccessMessage });
   property.approvalStatus = req.body.status === 'rejected' ? 'rejected' : 'approved';
+  if (property.approvalStatus === 'approved') {
+    property.approvedBy = req.user._id;
+    property.approvedAt = new Date();
+  } else {
+    property.approvedBy = undefined;
+    property.approvedAt = undefined;
+  }
   await property.save();
   await recordAdminActivity(req.user, property.approvalStatus === 'approved' ? 'property_approved' : 'property_rejected', `Property ${property.title} was ${property.approvalStatus}.`, { propertyId: property._id, propertyLocation: property.location });
   res.json({ message: 'Property status updated', data: property });

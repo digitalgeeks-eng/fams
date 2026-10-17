@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 const getRemainingMilliseconds = (status) => {
   if (!status) return null;
@@ -77,12 +76,6 @@ const LaunchCountdown = ({ status, error, onRetry }) => {
           </div>
         )}
 
-        <Link
-          to="/login?admin=1"
-          className="mt-7 inline-flex rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-white/30 hover:text-white"
-        >
-          Super Admin access
-        </Link>
         <p className="mt-8 text-xs text-slate-500">Launch time is shown in Nigerian time (WAT).</p>
       </section>
     </main>

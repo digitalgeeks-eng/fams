@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api.js';
+import { useAuth } from '../hooks/useAuth.jsx';
 import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
 import { calculatePropertyCommission, formatNairaAmount } from '../utils/propertyCommission.js';
 import { getLegacyContactConflict, getPropertyContactPhone } from '../utils/propertyContact.js';
@@ -9,7 +10,9 @@ const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini
 
 const AddProperty = () => {
   const { id } = useParams();
+  const { user } = useAuth();
   const isEditMode = Boolean(id);
+  const isSuperAdmin = user?.role === 'admin' && (!user.adminRole || user.adminRole === 'super_admin');
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -19,7 +22,8 @@ const AddProperty = () => {
     price: '',
     inspectionFee: '',
     visibleUntil: '',
-    contactPhone: ''
+    contactPhone: '',
+    availabilityStatus: 'available'
   });
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
@@ -48,7 +52,8 @@ const AddProperty = () => {
           price: property.price || '',
           inspectionFee: property.inspectionFee == null ? '' : String(property.inspectionFee),
           visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : '',
-          contactPhone: getPropertyContactPhone(property.adminContact)
+          contactPhone: getPropertyContactPhone(property.adminContact),
+          availabilityStatus: property.isUnavailable || property.availabilityStatus === 'not_available' ? 'not_available' : 'available'
         }));
       } catch (err) {
         setMessage(err.response?.data?.message || 'Could not load property');
@@ -73,6 +78,10 @@ const AddProperty = () => {
       setMessage('Please upload at least one property image or video before listing this property.');
       return;
     }
+    if (isSuperAdmin && !form.contactPhone.trim()) {
+      setMessage('Enter the private WhatsApp / Phone Number for this listing.');
+      return;
+    }
 
     const data = new FormData();
     data.append('title', form.title);
@@ -84,15 +93,18 @@ const AddProperty = () => {
     data.append('inspectionFee', inspectionFee === null ? '' : String(inspectionFee));
     data.append('visibleUntil', form.visibleUntil);
     data.append('contactPhone', form.contactPhone.trim());
+    if (isSuperAdmin) data.append('availabilityStatus', form.availabilityStatus);
     images.forEach((file) => data.append('images', file));
     videos.forEach((file) => data.append('videos', file));
     try {
       await api[isEditMode ? 'put' : 'post'](isEditMode ? `/properties/${id}` : '/properties', data);
-      setMessage(isEditMode ? 'Property updated successfully and sent for approval' : 'Property created successfully and awaiting admin approval');
+      setMessage(isEditMode
+        ? (isSuperAdmin ? 'Property updated successfully.' : 'Property updated successfully and sent for approval.')
+        : (isSuperAdmin ? 'Property created and approved successfully.' : 'Property created successfully and awaiting admin approval.'));
       if (!isEditMode) {
         setForm({
           title: '', description: '', location: '', customLocation: '', type: '', price: '', inspectionFee: '',
-          visibleUntil: '', contactPhone: ''
+          visibleUntil: '', contactPhone: '', availabilityStatus: 'available'
         });
         setLegacyContactConflict(null);
       }
@@ -142,7 +154,20 @@ const AddProperty = () => {
             required
           />
         </label>
-        {commissionEstimate && (
+        {isSuperAdmin && (
+          <label className="block">
+            <span className="block text-sm font-medium text-slate-700">Availability</span>
+            <select
+              value={form.availabilityStatus}
+              onChange={(e) => setForm({ ...form, availabilityStatus: e.target.value })}
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"
+            >
+              <option value="available">Available</option>
+              <option value="not_available">Not Available</option>
+            </select>
+          </label>
+        )}
+        {!isSuperAdmin && commissionEstimate && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-live="polite">
             <h2 className="font-semibold text-slate-800">Estimated commission breakdown</h2>
             <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
@@ -190,6 +215,7 @@ const AddProperty = () => {
               value={form.contactPhone}
               onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
               placeholder="08123456789 or +2348123456789"
+              required={isSuperAdmin && !isEditMode}
               className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3"
             />
           </label>
@@ -205,7 +231,9 @@ const AddProperty = () => {
         </div>
         <input type="file" multiple accept="image/*" onChange={(e) => setImages([...e.target.files])} className="w-full text-slate-600" />
         <input type="file" multiple accept="video/*" onChange={(e) => setVideos([...e.target.files])} className="w-full text-slate-600" />
-        <button className="px-6 py-3 bg-primary text-white rounded-2xl">{isEditMode ? 'Save changes' : 'Submit listing'}</button>
+        <button className="px-6 py-3 bg-primary text-white rounded-2xl">
+          {isEditMode ? 'Save changes' : isSuperAdmin ? 'Publish approved listing' : 'Submit listing'}
+        </button>
       </form>
     </section>
   );

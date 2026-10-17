@@ -26,7 +26,16 @@ const propertySchema = new mongoose.Schema({
   },
   images: [{ type: mongoose.Schema.Types.Mixed }],
   videos: [{ type: mongoose.Schema.Types.Mixed }],
-  agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  ownerType: { type: String, enum: ['agent', 'admin'], default: 'agent', required: true },
+  agentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required() {
+      return this.ownerType === 'agent';
+    }
+  },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  createdByRole: { type: String, enum: ['agent', 'admin'] },
   adminContact: {
     contactPhone: { type: String, trim: true },
     name: { type: String, trim: true },
@@ -39,6 +48,8 @@ const propertySchema = new mongoose.Schema({
     linkedin: { type: String, trim: true }
   },
   approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  approvedAt: { type: Date },
   isUnavailable: { type: Boolean, default: false },
   availabilityStatus: { type: String, enum: ['available', 'not_available'], default: 'available' },
   availabilityReason: { type: String, enum: ['payment_verified', 'admin_disabled', 'other'] },

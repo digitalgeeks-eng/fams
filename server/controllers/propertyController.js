@@ -99,6 +99,11 @@ export const createProperty = async (req, res) => {
     visibleUntil,
     contactPhone: submittedContactPhone
   } = req.body;
+  const isAdministrator = req.user.role === 'admin';
+  const isSuperAdministrator = isSuperAdmin(req.user);
+  if (isAdministrator && !isSuperAdministrator) {
+    return res.status(403).json({ message: 'Only a Super Admin can create administrator-managed property listings.' });
+  }
   const savedLocation = normalizePropertyLocation({ location, customLocation });
   if (!title || !description || !savedLocation || !type || price === undefined || price === null || String(price).trim() === '') {
     return res.status(400).json({ message: 'Property title, description, location, type and price are required' });
@@ -115,6 +120,9 @@ export const createProperty = async (req, res) => {
     return res.status(400).json({ message: 'Please enter a valid inspection fee of 0 or more.' });
   }
   const contactPhone = String(submittedContactPhone || '').trim();
+  if (isSuperAdministrator && !contactPhone) {
+    return res.status(400).json({ message: 'A private WhatsApp / Phone Number is required for administrator-created properties.' });
+  }
   if (contactPhone && !normalizeNigerianPhoneNumber(contactPhone)) {
     return res.status(400).json({ message: 'Enter a valid Nigerian phone number, such as 08123456789 or +2348123456789.' });
   }
@@ -131,6 +139,10 @@ export const createProperty = async (req, res) => {
   }
   if (String(location).trim().toLowerCase() === 'other' && !String(customLocation || '').trim()) {
     return res.status(400).json({ message: 'Please enter the location.' });
+  }
+  const availabilityStatus = req.body.availabilityStatus || 'available';
+  if (!['available', 'not_available'].includes(availabilityStatus)) {
+    return res.status(400).json({ message: 'Please select a valid property availability status.' });
   }
 
   const images = await uploadPropertyMediaToCloudinary(req.files?.images);
@@ -150,15 +162,32 @@ export const createProperty = async (req, res) => {
     inspectionFee,
     images,
     videos,
-    availabilityStatus: 'available',
+    ownerType: isSuperAdministrator ? 'admin' : 'agent',
+    ...(isSuperAdministrator ? {} : { agentId: req.user._id }),
+    createdBy: req.user._id,
+    createdByRole: req.user.role,
+    approvalStatus: isSuperAdministrator ? 'approved' : 'pending',
+    ...(isSuperAdministrator ? { approvedBy: req.user._id, approvedAt: new Date() } : {}),
+    availabilityStatus,
+    isUnavailable: availabilityStatus === 'not_available',
+    ...(availabilityStatus === 'not_available' ? { availabilityReason: 'admin_disabled' } : {}),
     visibleUntil: parsedVisibleUntil,
-    agentId: req.user._id,
     adminContact: {
       contactPhone
     }
   });
+  if (isSuperAdministrator) {
+    await recordAdminActivity(req.user, 'property_created', `Property ${property.title} was created by a Super Admin.`, {
+      propertyId: property._id,
+      propertyLocation: property.location
+    });
+    await recordAdminActivity(req.user, 'property_approved', `Property ${property.title} was approved on creation by a Super Admin.`, {
+      propertyId: property._id,
+      propertyLocation: property.location
+    });
+  }
   const serializedProperty = typeof property.toObject === 'function' ? property.toObject() : property;
-  const data = req.user.role === 'agent' || isSuperAdmin(req.user)
+  const data = req.user.role === 'agent'
     ? { ...serializedProperty, commissionEstimate }
     : property;
   res.status(201).json({ message: 'Property created successfully', data });
@@ -168,7 +197,7 @@ export const updateProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
   if (!property) return res.status(404).json({ message: 'Property not found' });
   if (property.isDeleted) return res.status(409).json({ message: 'Deleted properties must be restored before they can be edited' });
-  if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
+  if (req.user.role !== 'admin' && property.agentId?.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to edit this property' });
   }
   if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {
@@ -176,7 +205,7 @@ export const updateProperty = async (req, res) => {
   }
 
   const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
-  const updates = { approvalStatus: 'pending' };
+  const updates = { approvalStatus: req.user.role === 'admin' && isSuperAdmin(req.user) ? property.approvalStatus : 'pending' };
   const changes = [];
   let commissionEstimate;
   if (req.body.price !== undefined) {
@@ -204,6 +233,28 @@ export const updateProperty = async (req, res) => {
     const inspectionFee = hasInspectionFee ? parseInspectionFee(submittedInspectionFee) : null;
     if (hasInspectionFee && inspectionFee === null) {
       return res.status(400).json({ message: 'Please enter a valid inspection fee of 0 or more.' });
+    }
+    if (req.body.availabilityStatus !== undefined) {
+      if (!isSuperAdmin(req.user)) {
+        return res.status(403).json({ message: 'Only a Super Admin can update property availability.' });
+      }
+      if (!['available', 'not_available'].includes(req.body.availabilityStatus)) {
+        return res.status(400).json({ message: 'Please select a valid property availability status.' });
+      }
+      const unavailable = req.body.availabilityStatus === 'not_available';
+      if (property.availabilityStatus !== req.body.availabilityStatus) {
+        changes.push({ field: 'availabilityStatus', oldValue: property.availabilityStatus, newValue: req.body.availabilityStatus });
+        updates.availabilityStatus = req.body.availabilityStatus;
+      }
+      if (property.isUnavailable !== unavailable) {
+        changes.push({ field: 'isUnavailable', oldValue: property.isUnavailable, newValue: unavailable });
+        updates.isUnavailable = unavailable;
+      }
+      const reason = unavailable ? 'admin_disabled' : undefined;
+      if (property.availabilityReason !== reason) {
+        changes.push({ field: 'availabilityReason', oldValue: property.availabilityReason, newValue: reason });
+        updates.availabilityReason = reason;
+      }
     }
     const oldValue = property.inspectionFee ?? null;
     if (oldValue !== inspectionFee) {
@@ -294,10 +345,15 @@ export const updateProperty = async (req, res) => {
   const serializedProperty = typeof updatedProperty.toObject === 'function' ? updatedProperty.toObject() : updatedProperty;
   const resultingPrice = commissionEstimate?.propertyPrice ?? updatedProperty.price ?? property.price;
   const estimate = calculatePropertyCommission(resultingPrice);
-  const data = req.user.role === 'agent' || isSuperAdmin(req.user)
+  const data = req.user.role === 'agent'
     ? { ...serializedProperty, commissionEstimate: estimate }
     : updatedProperty;
-  res.json({ message: 'Property updated and sent for approval', data });
+  res.json({
+    message: req.user.role === 'admin' && isSuperAdmin(req.user)
+      ? 'Property updated successfully.'
+      : 'Property updated and sent for approval',
+    data
+  });
 };
 
 export const rateProperty = async (req, res) => {
@@ -345,7 +401,7 @@ export const rateProperty = async (req, res) => {
 export const deleteProperty = async (req, res) => {
   const property = await Property.findById(req.params.id);
   if (!property) return res.status(404).json({ message: 'Property not found' });
-  if (req.user.role !== 'admin' && property.agentId.toString() !== req.user._id.toString()) {
+  if (req.user.role !== 'admin' && property.agentId?.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Unauthorized to delete this property' });
   }
   if (req.user.role === 'admin' && !assertAdminPropertyAccess(req.user, property)) {

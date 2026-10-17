@@ -42,6 +42,7 @@ const AdminDashboard = () => {
         <h1 className="text-3xl font-semibold">Admin dashboard</h1>
         <p className="mt-2 text-slate-600">{user?.adminRole === 'location_admin' ? `Manage ${user.assignedLocation} properties and approvals.` : 'Manage agents, property approvals, payments, complaints, and users from one place.'}</p>
         {user?.adminRole !== 'location_admin' && <Link to="/admin/manage" className="mt-4 inline-flex rounded-2xl bg-secondary px-4 py-2 font-semibold text-white hover:bg-slate-900">Admin Management</Link>}
+        {user?.adminRole !== 'location_admin' && <Link to="/admin/properties/new" className="mt-4 ml-3 inline-flex rounded-2xl bg-primary px-4 py-2 font-semibold text-white hover:bg-blue-700">Add Property</Link>}
       </div>
       {user?.adminRole !== 'location_admin' && <div className="grid gap-6 md:grid-cols-3">
         <Link to="/admin/agents" className="rounded-3xl bg-primary text-white p-6 shadow-xl hover:bg-slate-900">

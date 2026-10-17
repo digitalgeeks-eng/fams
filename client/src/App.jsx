@@ -155,6 +155,8 @@ const App = () => (
           <Route path="/admin" element={<PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>} />
           <Route path="/admin/manage" element={<SuperAdminRoute><AdminManagement /></SuperAdminRoute>} />
           <Route path="/admin/agents" element={<SuperAdminRoute><AgentVerification /></SuperAdminRoute>} />
+          <Route path="/admin/properties/new" element={<SuperAdminRoute><AddProperty /></SuperAdminRoute>} />
+          <Route path="/admin/properties/:id/edit" element={<SuperAdminRoute><AddProperty /></SuperAdminRoute>} />
           <Route path="/admin/properties" element={<LocationAdminPropertyRoute><PropertyApproval /></LocationAdminPropertyRoute>} />
           <Route path="/admin/payments" element={<LocationAdminPropertyRoute><PaymentVerification /></LocationAdminPropertyRoute>} />
           <Route path="/admin/bookings" element={<LocationAdminPropertyRoute><AdminBookings /></LocationAdminPropertyRoute>} />

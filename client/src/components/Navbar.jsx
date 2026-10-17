@@ -51,6 +51,7 @@ const Navbar = () => {
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/manage" label="Admin Management" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/agents" label="Agents" />}
               <MenuLink to="/admin/properties" label="Properties" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/properties/new" label="Add Property" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/users" label="Users" />}
               <MenuLink to="/admin/payments" label="Payments" />
               {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
@@ -125,6 +126,7 @@ const Navbar = () => {
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/manage" label="Admin Management" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/agents" label="Agents" />}
               <MenuLink to="/admin/properties" label="Properties" />
+              {user.adminRole !== 'location_admin' && <MenuLink to="/admin/properties/new" label="Add Property" />}
               {user.adminRole !== 'location_admin' && <MenuLink to="/admin/users" label="Users" />}
               <MenuLink to="/admin/payments" label="Payments" />
               {user.adminRole !== 'location_admin' && <MenuLink to="/complaints" label="Complaints" />}
