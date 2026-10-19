@@ -1,12 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
 import { calculatePropertyCommission, formatNairaAmount } from '../utils/propertyCommission.js';
 import { getLegacyContactConflict, getPropertyContactPhone } from '../utils/propertyContact.js';
+import { createMediaOrder, getEditablePropertyMedia, getMediaUrl, validatePropertyMediaFiles } from '../utils/propertyMedia.js';
 
 const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'];
+
+const MediaPreview = ({ kind, file, media, label }) => {
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [failed, setFailed] = useState(false);
+  const storedUrl = getMediaUrl(media);
+
+  useEffect(() => {
+    setFailed(false);
+    if (!file) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  const url = file ? previewUrl : storedUrl;
+  if (!url || failed) {
+    return <div className="flex aspect-video items-center justify-center bg-slate-100 px-3 text-center text-xs text-slate-500">Media preview could not be loaded.</div>;
+  }
+  if (kind === 'videos') {
+    return <video src={url} className="aspect-video w-full bg-black" controls preload="metadata" playsInline aria-label={label} onError={() => setFailed(true)} />;
+  }
+  return <img src={url} alt={label} className="aspect-[4/3] w-full bg-slate-100 object-contain" loading="lazy" onError={() => setFailed(true)} />;
+};
 
 const AddProperty = () => {
   const { id } = useParams();
@@ -27,18 +54,34 @@ const AddProperty = () => {
   });
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
-  const [existingMediaCount, setExistingMediaCount] = useState(0);
+  const [existingImages, setExistingImages] = useState([]);
+  const [existingVideos, setExistingVideos] = useState([]);
   const [message, setMessage] = useState('');
+  const [loadingProperty, setLoadingProperty] = useState(Boolean(id));
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [legacyContactConflict, setLegacyContactConflict] = useState(null);
+  const mediaKey = useRef(0);
+  const [coverImageKey, setCoverImageKey] = useState('');
   const commissionEstimate = calculatePropertyCommission(form.price);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setLoadingProperty(false);
+      return;
+    }
+    setLoadingProperty(true);
     const loadProperty = async () => {
       try {
         const response = await api.get(`/properties/${id}`);
         const property = response.data.data;
-        setExistingMediaCount((property.images?.length || 0) + (property.videos?.length || 0));
+        const savedImages = getEditablePropertyMedia(property, 'images')
+          .map(({ media, sourceIndex }) => ({ key: `existing-image-${sourceIndex}`, media, sourceIndex }));
+        const savedVideos = getEditablePropertyMedia(property, 'videos')
+          .map(({ media, sourceIndex }) => ({ key: `existing-video-${sourceIndex}`, media, sourceIndex }));
+        setExistingImages(savedImages);
+        setExistingVideos(savedVideos);
+        setCoverImageKey(savedImages[0]?.key || '');
         const displayedLocation = LEGACY_LOCATION_ALIASES[property.location] || property.location || '';
         const isPredefined = LOCATIONS.includes(displayedLocation) && displayedLocation !== 'Other';
         setLegacyContactConflict(getLegacyContactConflict(property.adminContact));
@@ -57,13 +100,38 @@ const AddProperty = () => {
         }));
       } catch (err) {
         setMessage(err.response?.data?.message || 'Could not load property');
+      } finally {
+        setLoadingProperty(false);
       }
     };
     loadProperty();
   }, [id]);
 
+  const addSelectedFiles = (event, kind) => {
+    const selected = Array.from(event.target.files || []).map((file) => ({
+      key: `${kind}-${mediaKey.current++}`,
+      file
+    }));
+    event.target.value = '';
+    const nextImages = kind === 'image' ? [...images, ...selected] : images;
+    const nextVideos = kind === 'video' ? [...videos, ...selected] : videos;
+    const mediaError = validatePropertyMediaFiles(
+      nextImages.map((item) => item.file),
+      nextVideos.map((item) => item.file)
+    );
+    if (mediaError) {
+      setMessage(mediaError);
+      return;
+    }
+    setMessage('');
+    setImages(nextImages);
+    setVideos(nextVideos);
+    if (kind === 'image' && !coverImageKey && selected.length) setCoverImageKey(selected[0].key);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submitting || loadingProperty) return;
     const inspectionFeeValue = form.inspectionFee.trim();
     const inspectionFee = inspectionFeeValue === '' ? null : Number(inspectionFeeValue);
     if (inspectionFeeValue !== '' && (!Number.isFinite(inspectionFee) || inspectionFee < 0)) {
@@ -71,11 +139,18 @@ const AddProperty = () => {
       return;
     }
 
-    const totalSelectedMedia = images.length + videos.length;
-    const totalMedia = totalSelectedMedia + existingMediaCount;
+    const totalMedia = images.length + videos.length + existingImages.length + existingVideos.length;
 
     if (totalMedia === 0) {
       setMessage('Please upload at least one property image or video before listing this property.');
+      return;
+    }
+    const mediaError = validatePropertyMediaFiles(
+      images.map((item) => item.file),
+      videos.map((item) => item.file)
+    );
+    if (mediaError) {
+      setMessage(mediaError);
       return;
     }
     if (isSuperAdmin && !form.contactPhone.trim()) {
@@ -94,10 +169,29 @@ const AddProperty = () => {
     data.append('visibleUntil', form.visibleUntil);
     data.append('contactPhone', form.contactPhone.trim());
     if (isSuperAdmin) data.append('availabilityStatus', form.availabilityStatus);
-    images.forEach((file) => data.append('images', file));
-    videos.forEach((file) => data.append('videos', file));
+    images.forEach(({ file }) => data.append('images', file));
+    videos.forEach(({ file }) => data.append('videos', file));
+    data.append('imageOrder', JSON.stringify(createMediaOrder(
+      existingImages,
+      images.map((item, index) => ({ ...item, index })),
+      coverImageKey
+    )));
+    data.append('videoOrder', JSON.stringify([
+      ...existingVideos.map((item) => `existing:${item.sourceIndex}`),
+      ...videos.map((item, index) => `upload:${index}`)
+    ]));
+    setSubmitting(true);
+    setUploadProgress(0);
     try {
-      await api[isEditMode ? 'put' : 'post'](isEditMode ? `/properties/${id}` : '/properties', data);
+      const response = await api[isEditMode ? 'put' : 'post'](
+        isEditMode ? `/properties/${id}` : '/properties',
+        data,
+        { onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            setUploadProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+          }
+        } }
+      );
       setMessage(isEditMode
         ? (isSuperAdmin ? 'Property updated successfully.' : 'Property updated successfully and sent for approval.')
         : (isSuperAdmin ? 'Property created and approved successfully.' : 'Property created successfully and awaiting admin approval.'));
@@ -107,13 +201,35 @@ const AddProperty = () => {
           visibleUntil: '', contactPhone: '', availabilityStatus: 'available'
         });
         setLegacyContactConflict(null);
+        setExistingImages([]);
+        setExistingVideos([]);
+        setCoverImageKey('');
+      } else {
+        const savedProperty = response.data.data;
+        const savedImages = getEditablePropertyMedia(savedProperty, 'images')
+          .map(({ media, sourceIndex }) => ({ key: `existing-image-${sourceIndex}`, media, sourceIndex }));
+        const savedVideos = getEditablePropertyMedia(savedProperty, 'videos')
+          .map(({ media, sourceIndex }) => ({ key: `existing-video-${sourceIndex}`, media, sourceIndex }));
+        setExistingImages(savedImages);
+        setExistingVideos(savedVideos);
+        setCoverImageKey(savedImages[0]?.key || '');
       }
       setImages([]);
       setVideos([]);
-      setExistingMediaCount(0);
+      setUploadProgress(100);
     } catch (err) {
       setMessage(err.response?.data?.message || 'Could not submit listing');
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  const moveMedia = (setter, items, index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const reordered = [...items];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setter(reordered);
   };
 
   return (
@@ -229,10 +345,101 @@ const AddProperty = () => {
             </div>
           )}
         </div>
-        <input type="file" multiple accept="image/*" onChange={(e) => setImages([...e.target.files])} className="w-full text-slate-600" />
-        <input type="file" multiple accept="video/*" onChange={(e) => setVideos([...e.target.files])} className="w-full text-slate-600" />
-        <button className="px-6 py-3 bg-primary text-white rounded-2xl">
-          {isEditMode ? 'Save changes' : isSuperAdmin ? 'Publish approved listing' : 'Submit listing'}
+        <section className="space-y-4 rounded-2xl border border-slate-200 p-4" aria-labelledby="property-images-heading">
+          <div>
+            <h2 id="property-images-heading" className="font-semibold text-slate-900">Property Images</h2>
+            <p className="mt-1 text-xs text-slate-500">Up to 15 images per upload, 100 MB per file. The first image is the cover photo.</p>
+          </div>
+          <input
+            type="file"
+            multiple
+            accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif,.svg,.ico,image/*"
+            onChange={(event) => addSelectedFiles(event, 'image')}
+            className="w-full text-sm text-slate-600"
+            aria-label="Upload property images"
+          />
+          {(existingImages.length > 0 || images.length > 0) && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {existingImages.map((item, index) => (
+                <div key={item.key} className="overflow-hidden rounded-xl border border-slate-200">
+                  <MediaPreview kind="images" media={item.media} label={`Saved property image ${index + 1}`} />
+                  <div className="flex flex-wrap items-center gap-2 p-2">
+                    <button type="button" onClick={() => setCoverImageKey(item.key)} className={`rounded-lg px-2 py-1 text-xs font-medium ${coverImageKey === item.key ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'}`}>
+                      {coverImageKey === item.key ? 'Cover photo' : 'Make cover'}
+                    </button>
+                    <button type="button" disabled={index === 0} onClick={() => moveMedia(setExistingImages, existingImages, index, -1)} className="rounded-lg bg-slate-100 px-2 py-1 text-xs disabled:opacity-40" aria-label={`Move saved image ${index + 1} earlier`}>Move up</button>
+                    <button type="button" disabled={index === existingImages.length - 1} onClick={() => moveMedia(setExistingImages, existingImages, index, 1)} className="rounded-lg bg-slate-100 px-2 py-1 text-xs disabled:opacity-40" aria-label={`Move saved image ${index + 1} later`}>Move down</button>
+                    <button type="button" onClick={() => {
+                      setExistingImages((current) => current.filter((candidate) => candidate.key !== item.key));
+                      if (coverImageKey === item.key) setCoverImageKey(existingImages[index + 1]?.key || existingImages[index - 1]?.key || images[0]?.key || '');
+                    }} className="ml-auto rounded-lg bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">Remove</button>
+                  </div>
+                </div>
+              ))}
+              {images.map((item, index) => (
+                <div key={item.key} className="overflow-hidden rounded-xl border border-slate-200">
+                  <MediaPreview kind="images" file={item.file} label={`New property image ${index + 1}`} />
+                  <div className="flex flex-wrap items-center gap-2 p-2">
+                    <button type="button" onClick={() => setCoverImageKey(item.key)} className={`rounded-lg px-2 py-1 text-xs font-medium ${coverImageKey === item.key ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'}`}>
+                      {coverImageKey === item.key ? 'Cover photo' : 'Make cover'}
+                    </button>
+                    <button type="button" disabled={index === 0} onClick={() => moveMedia(setImages, images, index, -1)} className="rounded-lg bg-slate-100 px-2 py-1 text-xs disabled:opacity-40" aria-label={`Move new image ${index + 1} earlier`}>Move up</button>
+                    <button type="button" disabled={index === images.length - 1} onClick={() => moveMedia(setImages, images, index, 1)} className="rounded-lg bg-slate-100 px-2 py-1 text-xs disabled:opacity-40" aria-label={`Move new image ${index + 1} later`}>Move down</button>
+                    <button type="button" onClick={() => {
+                      setImages((current) => current.filter((candidate) => candidate.key !== item.key));
+                      if (coverImageKey === item.key) setCoverImageKey(existingImages[0]?.key || images[index + 1]?.key || images[index - 1]?.key || '');
+                    }} className="ml-auto rounded-lg bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="space-y-4 rounded-2xl border border-slate-200 p-4" aria-labelledby="property-videos-heading">
+          <div>
+            <h2 id="property-videos-heading" className="font-semibold text-slate-900">Property Videos</h2>
+            <p className="mt-1 text-xs text-slate-500">Up to 5 videos per upload, 100 MB per file.</p>
+          </div>
+          <input
+            type="file"
+            multiple
+            accept=".mp4,.avi,.mov,.mkv,.webm,video/*"
+            onChange={(event) => addSelectedFiles(event, 'video')}
+            className="w-full text-sm text-slate-600"
+            aria-label="Upload property videos"
+          />
+          {(existingVideos.length > 0 || videos.length > 0) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {existingVideos.map((item, index) => (
+                <div key={item.key} className="overflow-hidden rounded-xl border border-slate-200">
+                  <MediaPreview kind="videos" media={item.media} label={`Saved property video ${index + 1}`} />
+                  <div className="flex items-center justify-between gap-2 p-2">
+                    <span className="text-xs text-slate-600">Saved video {index + 1}</span>
+                    <button type="button" onClick={() => setExistingVideos((current) => current.filter((candidate) => candidate.key !== item.key))} className="rounded-lg bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">Remove</button>
+                  </div>
+                </div>
+              ))}
+              {videos.map((item, index) => (
+                <div key={item.key} className="overflow-hidden rounded-xl border border-slate-200">
+                  <MediaPreview kind="videos" file={item.file} label={`New property video ${index + 1}`} />
+                  <div className="flex items-center justify-between gap-2 p-2">
+                    <span className="text-xs text-slate-600">New video {index + 1}</span>
+                    <button type="button" onClick={() => setVideos((current) => current.filter((candidate) => candidate.key !== item.key))} className="rounded-lg bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        {submitting && (
+          <div className="space-y-2" role="status" aria-live="polite">
+            <div className="flex justify-between text-sm text-slate-600"><span>Uploading property media</span><span>{uploadProgress}%</span></div>
+            <progress className="h-2 w-full accent-primary" max="100" value={uploadProgress} aria-label="Media upload progress" />
+          </div>
+        )}
+        {loadingProperty && <p className="text-sm text-slate-600" role="status">Loading saved property and media…</p>}
+        <button disabled={submitting || loadingProperty} className="rounded-2xl bg-primary px-6 py-3 text-white disabled:cursor-not-allowed disabled:opacity-60">
+          {loadingProperty ? 'Loading property…' : submitting ? 'Uploading...' : isEditMode ? 'Save changes' : isSuperAdmin ? 'Publish approved listing' : 'Submit listing'}
         </button>
       </form>
     </section>

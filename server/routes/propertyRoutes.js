@@ -3,6 +3,7 @@ import { optionalProtect, protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { uploadPropertyMedia, validateUploadedFiles } from '../middleware/uploadMiddleware.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { PROPERTY_MEDIA_LIMITS } from '../utils/propertyMedia.js';
 import {
   listProperties,
   getProperty,
@@ -24,8 +25,8 @@ router.post(
   protect,
   authorizeRoles('agent', 'admin'),
   uploadPropertyMedia.fields([
-    { name: 'images', maxCount: 15 },
-    { name: 'videos', maxCount: 5 }
+    { name: 'images', maxCount: PROPERTY_MEDIA_LIMITS.images },
+    { name: 'videos', maxCount: PROPERTY_MEDIA_LIMITS.videos }
   ]),
   validateUploadedFiles,
   asyncHandler(createProperty)
@@ -35,8 +36,8 @@ router.put(
   protect,
   authorizeRoles('agent', 'admin'),
   uploadPropertyMedia.fields([
-    { name: 'images', maxCount: 15 },
-    { name: 'videos', maxCount: 5 }
+    { name: 'images', maxCount: PROPERTY_MEDIA_LIMITS.images },
+    { name: 'videos', maxCount: PROPERTY_MEDIA_LIMITS.videos }
   ]),
   validateUploadedFiles,
   asyncHandler(updateProperty)

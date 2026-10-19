@@ -1,10 +1,13 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { getImageUrl } from '../utils/imageUtils.js';
+import { getMediaUrl, getValidPropertyMedia } from '../utils/propertyMedia.js';
 
 const PropertyCard = ({ property }) => {
   const [showDebug, setShowDebug] = useState(false);
-  const imageUrl = getImageUrl(property.images?.[0]);
+  const images = getValidPropertyMedia(property, 'images');
+  const videos = getValidPropertyMedia(property, 'videos');
+  const imageUrl = images.length ? getImageUrl(getMediaUrl(images[0].media)) : getImageUrl(undefined);
   const isUnavailable = property.isUnavailable || property.availabilityStatus === 'not_available';
 
   return (
@@ -48,6 +51,13 @@ const PropertyCard = ({ property }) => {
           </span>
         </div>
         <p className="line-clamp-2 text-xs sm:text-sm leading-relaxed text-slate-600">{property.description || 'A comfortable property with premium amenities and convenient campus access.'}</p>
+        {(images.length > 0 || videos.length > 0) && (
+          <p className="text-xs font-medium text-slate-500">
+            {images.length > 0 && `${images.length} ${images.length === 1 ? 'photo' : 'photos'}`}
+            {images.length > 0 && videos.length > 0 && ' · '}
+            {videos.length > 0 && `${videos.length} ${videos.length === 1 ? 'video' : 'videos'}`}
+          </p>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:pt-2 border-t border-slate-100 pt-2">
           <Link to={`/properties/${property._id}`} className="inline-flex items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-primary to-blue-600 px-4 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-semibold text-white transition duration-300 hover:shadow-lg hover:from-blue-600 hover:to-blue-700 active:scale-95">
             View Details →

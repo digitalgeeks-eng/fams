@@ -10,6 +10,12 @@ import { calculatePropertyCommission } from '../utils/propertyCommission.js';
 import { getPropertyContactNumber, normalizeNigerianPhoneNumber } from '../utils/propertyContact.js';
 import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
 import { recordAdminActivity } from '../utils/adminActivity.js';
+import {
+  getCloudinaryPublicId,
+  getStoredPropertyMedia,
+  PROPERTY_MEDIA_LIMITS,
+  resolvePropertyMediaOrder
+} from '../utils/propertyMedia.js';
 
 const uploadPropertyMediaToCloudinary = async (files = []) => Promise.all(files.map(async (file) => {
   const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
@@ -19,13 +25,6 @@ const uploadPropertyMediaToCloudinary = async (files = []) => Promise.all(files.
   });
   return { url: result.secure_url, publicId: result.public_id, resourceType };
 }));
-
-const deleteCloudinaryMedia = async (media = []) => {
-  await Promise.all(media.map((item) => {
-    if (!item || typeof item !== 'object' || !item.publicId) return null;
-    return deleteCloudinaryAsset(item.publicId, item.resourceType || 'image');
-  }));
-};
 
 export const listProperties = async (req, res) => {
   const { search, location, type, priceRange, page = 1, limit = 12 } = req.query;
@@ -145,8 +144,21 @@ export const createProperty = async (req, res) => {
     return res.status(400).json({ message: 'Please select a valid property availability status.' });
   }
 
-  const images = await uploadPropertyMediaToCloudinary(req.files?.images);
-  const videos = await uploadPropertyMediaToCloudinary(req.files?.videos);
+  const imageFiles = req.files?.images || [];
+  const videoFiles = req.files?.videos || [];
+  if (imageFiles.length > PROPERTY_MEDIA_LIMITS.images || videoFiles.length > PROPERTY_MEDIA_LIMITS.videos) {
+    return res.status(400).json({ message: 'The selected media exceeds the per-request image or video limit.' });
+  }
+  const imageOrder = resolvePropertyMediaOrder(req.body.imageOrder, 0, imageFiles.length);
+  const videoOrder = resolvePropertyMediaOrder(req.body.videoOrder, 0, videoFiles.length);
+  if (!imageOrder || !videoOrder) {
+    return res.status(400).json({ message: 'The selected media order is invalid. Please review the media selection and try again.' });
+  }
+
+  const uploadedImages = await uploadPropertyMediaToCloudinary(imageFiles);
+  const uploadedVideos = await uploadPropertyMediaToCloudinary(videoFiles);
+  const images = imageOrder.map((entry) => uploadedImages[Number(entry.slice('upload:'.length))]);
+  const videos = videoOrder.map((entry) => uploadedVideos[Number(entry.slice('upload:'.length))]);
 
   if (!images.length && !videos.length) {
     return res.status(400).json({ message: 'Please upload at least one property image or video before listing this property.' });
@@ -312,18 +324,42 @@ export const updateProperty = async (req, res) => {
 
   let nextImages = property.images || [];
   let nextVideos = property.videos || [];
+  const previousImages = getStoredPropertyMedia(property, 'images');
+  const previousVideos = getStoredPropertyMedia(property, 'videos');
+  const imageFiles = req.files?.images || [];
+  const videoFiles = req.files?.videos || [];
+  if (imageFiles.length > PROPERTY_MEDIA_LIMITS.images || videoFiles.length > PROPERTY_MEDIA_LIMITS.videos) {
+    return res.status(400).json({ message: 'The selected media exceeds the per-request image or video limit.' });
+  }
+  const imageOrder = resolvePropertyMediaOrder(req.body.imageOrder, previousImages.length, imageFiles.length);
+  const videoOrder = resolvePropertyMediaOrder(req.body.videoOrder, previousVideos.length, videoFiles.length);
+  if (!imageOrder || !videoOrder) {
+    return res.status(400).json({ message: 'The selected media order is invalid. Please review the media selection and try again.' });
+  }
 
-  if (req.files) {
-    if (req.files.images?.length) {
-      nextImages = await uploadPropertyMediaToCloudinary(req.files.images);
-      updates.images = nextImages;
-      changes.push({ field: 'images', oldValue: property.images, newValue: nextImages });
-    }
-    if (req.files.videos?.length) {
-      nextVideos = await uploadPropertyMediaToCloudinary(req.files.videos);
-      updates.videos = nextVideos;
-      changes.push({ field: 'videos', oldValue: property.videos, newValue: nextVideos });
-    }
+  const uploadedImages = await uploadPropertyMediaToCloudinary(imageFiles);
+  const uploadedVideos = await uploadPropertyMediaToCloudinary(videoFiles);
+  nextImages = imageOrder.map((entry) => {
+    const [source, rawIndex] = entry.split(':');
+    return source === 'existing' ? previousImages[Number(rawIndex)] : uploadedImages[Number(rawIndex)];
+  });
+  nextVideos = videoOrder.map((entry) => {
+    const [source, rawIndex] = entry.split(':');
+    return source === 'existing' ? previousVideos[Number(rawIndex)] : uploadedVideos[Number(rawIndex)];
+  });
+
+  const imageManifestProvided = req.body.imageOrder !== undefined;
+  const videoManifestProvided = req.body.videoOrder !== undefined;
+  if (imageManifestProvided || imageFiles.length) {
+    updates.images = nextImages;
+    changes.push({ field: 'images', oldValue: previousImages, newValue: nextImages });
+  }
+  if (videoManifestProvided || videoFiles.length) {
+    updates.videos = nextVideos;
+    changes.push({ field: 'videos', oldValue: previousVideos, newValue: nextVideos });
+  }
+  if (imageManifestProvided || videoManifestProvided) {
+    updates.$unset = { image: '', video: '' };
   }
 
   if (!nextImages.length && !nextVideos.length) {
@@ -331,8 +367,39 @@ export const updateProperty = async (req, res) => {
   }
 
   const updatedProperty = await Property.findByIdAndUpdate(req.params.id, updates, { new: true });
-  if (req.files?.images?.length) await deleteCloudinaryMedia(property.images);
-  if (req.files?.videos?.length) await deleteCloudinaryMedia(property.videos);
+  const retainedPublicIds = new Set(
+    [...nextImages, ...nextVideos].map(getCloudinaryPublicId).filter(Boolean)
+  );
+  const removedMedia = [...previousImages, ...previousVideos].filter((item) => {
+    const publicId = getCloudinaryPublicId(item);
+    return publicId && !retainedPublicIds.has(publicId);
+  });
+  const removedPublicIds = new Set();
+  for (const item of removedMedia) {
+    const publicId = getCloudinaryPublicId(item);
+    if (removedPublicIds.has(publicId)) continue;
+    removedPublicIds.add(publicId);
+    const isReferencedElsewhere = await Property.exists({
+      _id: { $ne: property._id },
+      $or: [
+        { 'images.publicId': publicId },
+        { 'images.public_id': publicId },
+        { 'videos.publicId': publicId },
+        { 'videos.public_id': publicId },
+        { 'image.publicId': publicId },
+        { 'image.public_id': publicId },
+        { 'video.publicId': publicId },
+        { 'video.public_id': publicId }
+      ]
+    });
+    const resourceType = item.resourceType || item.resource_type || 'image';
+    const managedFolder = resourceType === 'video'
+      ? 'fulafia-ams/properties/videos/'
+      : 'fulafia-ams/properties/images/';
+    if (!isReferencedElsewhere && publicId.startsWith(managedFolder)) {
+      await deleteCloudinaryAsset(publicId, resourceType);
+    }
+  }
   if (changes.length) {
     await PropertyEditHistory.create({
       propertyId: property._id,

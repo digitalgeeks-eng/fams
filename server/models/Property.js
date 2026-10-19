@@ -26,6 +26,8 @@ const propertySchema = new mongoose.Schema({
   },
   images: [{ type: mongoose.Schema.Types.Mixed }],
   videos: [{ type: mongoose.Schema.Types.Mixed }],
+  image: { type: mongoose.Schema.Types.Mixed },
+  video: { type: mongoose.Schema.Types.Mixed },
   ownerType: { type: String, enum: ['agent', 'admin'], default: 'agent', required: true },
   agentId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -67,7 +69,9 @@ const propertySchema = new mongoose.Schema({
 
 propertySchema.pre('validate', function (next) {
   const hasMedia = Array.isArray(this.images) && this.images.length > 0
-    || Array.isArray(this.videos) && this.videos.length > 0;
+    || Array.isArray(this.videos) && this.videos.length > 0
+    || this.image !== undefined && this.image !== null
+    || this.video !== undefined && this.video !== null;
 
   if (!hasMedia) {
     return next(new Error('Please upload at least one property image or video before listing this property.'));
