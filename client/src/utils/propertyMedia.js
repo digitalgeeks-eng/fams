@@ -1,6 +1,10 @@
 export const MAX_PROPERTY_IMAGES = 15;
 export const MAX_PROPERTY_VIDEOS = 5;
 export const MAX_PROPERTY_MEDIA_FILE_SIZE = 100 * 1024 * 1024;
+export const MAX_PROPERTY_MEDIA_REQUEST_SIZE = 200 * 1024 * 1024;
+export const MAX_ROOM_MEDIA_FILE_SIZE = 10 * 1024 * 1024;
+export const MAX_ROOM_IMAGES = 5;
+export const MAX_ROOM_VIDEOS = 2;
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'svg', 'ico']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'avi', 'mov', 'mkv', 'webm']);
@@ -55,6 +59,9 @@ const getExtension = (file) => String(file?.name || '').split('.').pop().toLower
 export const validatePropertyMediaFiles = (images, videos) => {
   if (images.length > MAX_PROPERTY_IMAGES) return `Choose no more than ${MAX_PROPERTY_IMAGES} images at a time.`;
   if (videos.length > MAX_PROPERTY_VIDEOS) return `Choose no more than ${MAX_PROPERTY_VIDEOS} videos at a time.`;
+  if ([...images, ...videos].reduce((total, file) => total + file.size, 0) > MAX_PROPERTY_MEDIA_REQUEST_SIZE) {
+    return 'The selected property media exceeds the 200 MB total upload limit.';
+  }
 
   for (const file of images) {
     if (!IMAGE_EXTENSIONS.has(getExtension(file)) || !file.type?.startsWith('image/')) {
@@ -71,6 +78,15 @@ export const validatePropertyMediaFiles = (images, videos) => {
   }
 
   return null;
+};
+
+export const validateRoomMediaFiles = (images, videos) => {
+  if (images.length > MAX_ROOM_IMAGES) return `Choose no more than ${MAX_ROOM_IMAGES} room images at a time.`;
+  if (videos.length > MAX_ROOM_VIDEOS) return `Choose no more than ${MAX_ROOM_VIDEOS} room videos at a time.`;
+  for (const file of [...images, ...videos]) {
+    if (file.size > MAX_ROOM_MEDIA_FILE_SIZE) return `${file.name} is larger than the 10 MB room-media limit.`;
+  }
+  return validatePropertyMediaFiles(images, videos);
 };
 
 export const createMediaOrder = (existingItems, newItems, coverKey) => {

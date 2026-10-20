@@ -20,6 +20,8 @@ import contactRoutes from './routes/contactRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import { createLaunchModeMiddleware } from './middleware/launchModeMiddleware.js';
 import User from './models/User.js';
+import Room from './models/Room.js';
+import RoomInspectionRequest from './models/RoomInspectionRequest.js';
 import { getLaunchConfig, getLaunchStatus } from './utils/launchConfig.js';
 
 dotenv.config();
@@ -80,6 +82,7 @@ let server;
 const startServer = async () => {
   try {
     await connectDatabase();
+    await Promise.all([Room.createIndexes(), RoomInspectionRequest.createIndexes()]);
     await User.updateMany({ role: 'admin', adminRole: { $exists: false } }, { $set: { adminRole: 'super_admin' } });
     server = http.createServer(app);
     server.listen(PORT, () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
@@ -37,6 +37,7 @@ const MediaPreview = ({ kind, file, media, label }) => {
 
 const AddProperty = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isEditMode = Boolean(id);
   const isSuperAdmin = user?.role === 'admin' && (!user.adminRole || user.adminRole === 'super_admin');
@@ -50,8 +51,15 @@ const AddProperty = () => {
     inspectionFee: '',
     visibleUntil: '',
     contactPhone: '',
-    availabilityStatus: 'available'
+    availabilityStatus: 'available',
+    managementMode: 'single_unit',
+    addressDirections: '',
+    buildingFacilities: ''
   });
+  const [roomCount, setRoomCount] = useState(id ? '0' : '1');
+  const [roomNumberPrefix, setRoomNumberPrefix] = useState('Room ');
+  const [roomPrice, setRoomPrice] = useState('');
+  const [roomOverrides, setRoomOverrides] = useState([]);
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
@@ -63,7 +71,9 @@ const AddProperty = () => {
   const [legacyContactConflict, setLegacyContactConflict] = useState(null);
   const mediaKey = useRef(0);
   const [coverImageKey, setCoverImageKey] = useState('');
-  const commissionEstimate = calculatePropertyCommission(form.price);
+  const commissionEstimate = calculatePropertyCommission(
+    form.managementMode === 'multi_room' ? roomPrice || form.price : form.price
+  );
 
   useEffect(() => {
     if (!id) {
@@ -96,8 +106,13 @@ const AddProperty = () => {
           inspectionFee: property.inspectionFee == null ? '' : String(property.inspectionFee),
           visibleUntil: property.visibleUntil ? new Date(property.visibleUntil).toISOString().slice(0, 16) : '',
           contactPhone: getPropertyContactPhone(property.adminContact),
-          availabilityStatus: property.isUnavailable || property.availabilityStatus === 'not_available' ? 'not_available' : 'available'
+          availabilityStatus: property.isUnavailable || property.availabilityStatus === 'not_available' ? 'not_available' : 'available',
+          managementMode: property.managementMode || 'single_unit',
+          addressDirections: property.addressDirections || '',
+          buildingFacilities: Array.isArray(property.buildingFacilities) ? property.buildingFacilities.join(', ') : ''
         }));
+        setRoomCount('0');
+        setRoomPrice(property.price == null ? '' : String(property.price));
       } catch (err) {
         setMessage(err.response?.data?.message || 'Could not load property');
       } finally {
@@ -157,6 +172,45 @@ const AddProperty = () => {
       setMessage('Enter the private WhatsApp / Phone Number for this listing.');
       return;
     }
+    const roomCountValue = Number(roomCount);
+    const startingRoomPrice = roomPrice.trim() ? roomPrice : form.price;
+    if (form.managementMode === 'multi_room' && !isEditMode
+      && (!Number.isInteger(roomCountValue) || roomCountValue < 1 || roomCountValue > 100)) {
+      setMessage('Choose between 1 and 100 rooms to create this multi-room property.');
+      return;
+    }
+    if (roomCount.trim() && (!Number.isInteger(roomCountValue) || roomCountValue < 0 || roomCountValue > 100)) {
+      setMessage('Room count must be a whole number between 0 and 100.');
+      return;
+    }
+    const initialRooms = Array.from({ length: roomCountValue }, (_, index) => ({
+      roomNumber: String(roomOverrides[index]?.roomNumber || `${roomNumberPrefix}${index + 1}`).trim(),
+      type: roomOverrides[index]?.type || form.type,
+      price: roomOverrides[index]?.price === '' || roomOverrides[index]?.price === undefined
+        ? Number(startingRoomPrice)
+        : Number(roomOverrides[index].price),
+      billingPeriod: 'yearly',
+      status: roomOverrides[index]?.status || 'available',
+      toilet: roomOverrides[index]?.toilet || 'unknown',
+      shower: roomOverrides[index]?.shower || 'unknown',
+      kitchen: roomOverrides[index]?.kitchen || 'unknown',
+      waterSource: roomOverrides[index]?.waterSource || 'unknown',
+      waterAvailable: roomOverrides[index]?.waterAvailable === '' || roomOverrides[index]?.waterAvailable === undefined
+        ? null
+        : roomOverrides[index].waterAvailable === 'true',
+      electricity: roomOverrides[index]?.electricity === '' || roomOverrides[index]?.electricity === undefined
+        ? null
+        : roomOverrides[index].electricity === 'true',
+      facilities: String(roomOverrides[index]?.facilities || '').split(',').map((item) => item.trim()).filter(Boolean),
+      floorSection: roomOverrides[index]?.floorSection || '',
+      description: roomOverrides[index]?.description || ''
+    }));
+    if (form.managementMode === 'multi_room' && initialRooms.some((room) => (
+      !Number.isFinite(room.price) || room.price < 0
+    ))) {
+      setMessage('Enter a valid rent for every initial room.');
+      return;
+    }
 
     const data = new FormData();
     data.append('title', form.title);
@@ -168,6 +222,10 @@ const AddProperty = () => {
     data.append('inspectionFee', inspectionFee === null ? '' : String(inspectionFee));
     data.append('visibleUntil', form.visibleUntil);
     data.append('contactPhone', form.contactPhone.trim());
+    data.append('managementMode', form.managementMode);
+    data.append('addressDirections', form.addressDirections);
+    data.append('buildingFacilities', JSON.stringify(form.buildingFacilities.split(',').map((item) => item.trim()).filter(Boolean)));
+    if (form.managementMode === 'multi_room' && !isEditMode) data.append('initialRooms', JSON.stringify(initialRooms));
     if (isSuperAdmin) data.append('availabilityStatus', form.availabilityStatus);
     images.forEach(({ file }) => data.append('images', file));
     videos.forEach(({ file }) => data.append('videos', file));
@@ -182,6 +240,7 @@ const AddProperty = () => {
     ]));
     setSubmitting(true);
     setUploadProgress(0);
+    let savedProperty;
     try {
       const response = await api[isEditMode ? 'put' : 'post'](
         isEditMode ? `/properties/${id}` : '/properties',
@@ -192,20 +251,28 @@ const AddProperty = () => {
           }
         } }
       );
+      savedProperty = response.data.data;
       setMessage(isEditMode
         ? (isSuperAdmin ? 'Property updated successfully.' : 'Property updated successfully and sent for approval.')
         : (isSuperAdmin ? 'Property created and approved successfully.' : 'Property created successfully and awaiting admin approval.'));
       if (!isEditMode) {
+        if (form.managementMode === 'multi_room') {
+          navigate(isSuperAdmin
+            ? `/admin/properties/${savedProperty._id}/rooms`
+            : `/agent/listings/${savedProperty._id}/rooms`,
+          { state: { message: 'Property and initial rooms created successfully.' } });
+          return;
+        }
         setForm({
           title: '', description: '', location: '', customLocation: '', type: '', price: '', inspectionFee: '',
-          visibleUntil: '', contactPhone: '', availabilityStatus: 'available'
+          visibleUntil: '', contactPhone: '', availabilityStatus: 'available',
+          managementMode: 'single_unit', addressDirections: '', buildingFacilities: ''
         });
         setLegacyContactConflict(null);
         setExistingImages([]);
         setExistingVideos([]);
         setCoverImageKey('');
       } else {
-        const savedProperty = response.data.data;
         const savedImages = getEditablePropertyMedia(savedProperty, 'images')
           .map(({ media, sourceIndex }) => ({ key: `existing-image-${sourceIndex}`, media, sourceIndex }));
         const savedVideos = getEditablePropertyMedia(savedProperty, 'videos')
@@ -235,6 +302,15 @@ const AddProperty = () => {
   return (
     <section className="max-w-3xl mx-auto space-y-6">
       <h1 className="text-2xl font-semibold">{isEditMode ? 'Edit Property' : 'Add Property'}</h1>
+      {isEditMode && form.managementMode === 'multi_room' && (
+        <button
+          type="button"
+          onClick={() => navigate(isSuperAdmin ? `/admin/properties/${id}/rooms` : `/agent/listings/${id}/rooms`)}
+          className="rounded-xl border border-primary px-4 py-2 font-medium text-primary hover:bg-primary/5"
+        >
+          Manage rooms and inspection requests
+        </button>
+      )}
       <form onSubmit={handleSubmit} className="rounded-3xl bg-white p-6 shadow-xl space-y-4">
         {message && <div className="rounded-xl bg-slate-100 p-4 text-slate-700">{message}</div>}
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="w-full border border-slate-300 rounded-2xl px-4 py-3" required />
@@ -251,6 +327,39 @@ const AddProperty = () => {
             <input value={form.customLocation} onChange={(e) => setForm({ ...form, customLocation: e.target.value })} placeholder="Enter location name" className="mt-2 w-full border border-slate-300 rounded-2xl px-4 py-3" required />
           </label>
         )}
+        <label className="block">
+          <span className="block text-sm font-medium text-slate-700">Property management</span>
+          <select
+            value={form.managementMode}
+            onChange={(e) => {
+              setForm({ ...form, managementMode: e.target.value });
+              if (e.target.value === 'multi_room' && !isEditMode && Number(roomCount) === 0) setRoomCount('1');
+            }}
+            className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"
+          >
+            <option value="single_unit">Single unit</option>
+            <option value="multi_room">Building with multiple rooms</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="block text-sm font-medium text-slate-700">Address directions (optional)</span>
+          <textarea
+            value={form.addressDirections}
+            onChange={(e) => setForm({ ...form, addressDirections: e.target.value })}
+            maxLength={1000}
+            rows={2}
+            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-sm font-medium text-slate-700">Building facilities (comma separated)</span>
+          <input
+            value={form.buildingFacilities}
+            onChange={(e) => setForm({ ...form, buildingFacilities: e.target.value })}
+            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3"
+            placeholder="Parking, security, shared generator"
+          />
+        </label>
         <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full border border-slate-300 rounded-2xl px-4 py-3 bg-white" required>
           <option value="">Select house type</option>
           {PROPERTY_TYPES.map((houseType) => (
@@ -270,6 +379,109 @@ const AddProperty = () => {
             required
           />
         </label>
+        {form.managementMode === 'multi_room' && !isEditMode && (
+          <section className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <h2 className="font-semibold text-slate-900">Initial room setup</h2>
+            <p className="text-sm text-slate-600">Create identical rooms quickly. You can set different prices, facilities, availability, and media for each room afterward.</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-sm text-slate-700">
+                Number of rooms
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={roomCount}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setRoomCount(value);
+                    const count = Number(value);
+                    if (Number.isInteger(count) && count >= 0 && count <= 100) {
+                      setRoomOverrides((current) => Array.from({ length: count }, (_, index) => current[index] || {}));
+                    }
+                  }}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-slate-700">
+                Room label prefix
+                <input value={roomNumberPrefix} onChange={(e) => setRoomNumberPrefix(e.target.value)} maxLength={30} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" placeholder="Room " />
+              </label>
+              <label className="text-sm text-slate-700">
+                Starting rent (₦ per year)
+                <input type="number" min="0" step="0.01" value={roomPrice || form.price} onChange={(e) => setRoomPrice(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" />
+              </label>
+            </div>
+            {Number(roomCount) > 0 && Number(roomCount) <= 100 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-800">Initial room details</h3>
+                {Array.from({ length: Number(roomCount) }, (_, index) => {
+                  const room = roomOverrides[index] || {};
+                  const updateRoom = (field, value) => setRoomOverrides((current) => {
+                    const next = [...current];
+                    next[index] = { ...(next[index] || {}), [field]: value };
+                    return next;
+                  });
+                  return (
+                    <fieldset key={index} className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <legend className="px-1 text-xs font-medium text-slate-500">Room {index + 1}</legend>
+                      <label className="text-xs text-slate-700">Room number
+                        <input value={room.roomNumber ?? `${roomNumberPrefix}${index + 1}`} onChange={(event) => updateRoom('roomNumber', event.target.value)} maxLength={40} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
+                      </label>
+                      <label className="text-xs text-slate-700">Room type
+                        <select value={room.type || form.type} onChange={(event) => updateRoom('type', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" required>
+                          <option value="">Select type</option>
+                          {PROPERTY_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs text-slate-700">Rent per year (₦)
+                        <input type="number" min="0" step="0.01" value={room.price ?? (roomPrice || form.price)} onChange={(event) => updateRoom('price', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
+                      </label>
+                      {['toilet', 'shower', 'kitchen'].map((facility) => (
+                        <label key={facility} className="text-xs capitalize text-slate-700">{facility}
+                          <select value={room[facility] || 'unknown'} onChange={(event) => updateRoom(facility, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                            {['unknown', 'private', 'shared', 'none'].map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </label>
+                      ))}
+                      <label className="text-xs text-slate-700">Availability
+                        <select value={room.status || 'available'} onChange={(event) => updateRoom('status', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                          {['available', 'reserved', 'occupied', 'unavailable'].map((status) => <option key={status} value={status}>{status}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs text-slate-700">Water source
+                        <select value={room.waterSource || 'unknown'} onChange={(event) => updateRoom('waterSource', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                          {['unknown', 'tap', 'borehole', 'well', 'other', 'unavailable'].map((source) => <option key={source}>{source}</option>)}
+                        </select>
+                      </label>
+                      {[
+                        ['waterAvailable', 'Water available'],
+                        ['electricity', 'Electricity available']
+                      ].map(([field, label]) => (
+                        <label key={field} className="text-xs text-slate-700">{label}
+                          <select value={room[field] || ''} onChange={(event) => updateRoom(field, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                            <option value="">Unknown</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                          </select>
+                        </label>
+                      ))}
+                      <label className="text-xs text-slate-700">Facilities (comma separated)
+                        <input value={room.facilities || ''} onChange={(event) => updateRoom('facilities', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      </label>
+                      <label className="text-xs text-slate-700">Floor / section
+                        <input value={room.floorSection || ''} onChange={(event) => updateRoom('floorSection', event.target.value)} maxLength={80} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      </label>
+                      <label className="text-xs text-slate-700">Room description
+                        <input value={room.description || ''} onChange={(event) => updateRoom('description', event.target.value)} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      </label>
+                    </fieldset>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
         {isSuperAdmin && (
           <label className="block">
             <span className="block text-sm font-medium text-slate-700">Availability</span>
@@ -287,7 +499,7 @@ const AddProperty = () => {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-live="polite">
             <h2 className="font-semibold text-slate-800">Estimated commission breakdown</h2>
             <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
-              <p className="text-slate-600">Property rental price <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.propertyPrice)}</span></p>
+              <p className="text-slate-600">{form.managementMode === 'multi_room' ? 'Room rent used for this estimate' : 'Property rental price'} <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.propertyPrice)}</span></p>
               <p className="text-slate-600">StudentNest commission (3%) <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.studentNestCommission)}</span></p>
               <p className="text-slate-600">Agent expected amount (97%) <span className="block font-semibold text-slate-900">{formatNairaAmount(commissionEstimate.agentAmount)}</span></p>
             </div>

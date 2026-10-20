@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { Writable } from 'node:stream';
 import { v2 as cloudinary } from 'cloudinary';
 import Property from '../models/Property.js';
+import Room from '../models/Room.js';
 import Booking from '../models/Booking.js';
 import Recommendation from '../models/Recommendation.js';
 import {
@@ -33,10 +34,16 @@ const makeResponse = () => ({
 const makeProperty = () => ({
   _id: 'property-1',
   title: 'Private Contact Test',
+  approvalStatus: 'approved',
   price: 100000,
   location: 'Maraba',
   locationCategory: 'Maraba',
-  agentId: { _id: 'agent-1', toString: () => 'agent-1' },
+  agentId: {
+    _id: 'agent-1',
+    email: 'private-agent@example.test',
+    phone: '08011112222',
+    toString: () => 'agent-1'
+  },
   adminContact: {
     contactPhone: '08106083399',
     phone: '08011112222',
@@ -95,6 +102,8 @@ test('public property details and student ratings omit private contact data', as
       await getProperty({ params: { id: property._id }, user }, response);
       assert.equal(response.statusCode, 200);
       assert.equal(response.body.data.adminContact, undefined);
+      assert.equal(response.body.data.agentId.email, undefined);
+      assert.equal(response.body.data.agentId.phone, undefined);
     }
 
     const ownerResponse = makeResponse();
@@ -103,6 +112,7 @@ test('public property details and student ratings omit private contact data', as
       user: { _id: 'agent-1', role: 'agent' }
     }, ownerResponse);
     assert.equal(ownerResponse.body.data.adminContact.contactPhone, '08106083399');
+    assert.equal(ownerResponse.body.data.agentId.email, 'private-agent@example.test');
 
     let selectedFields;
     Property.find = () => {
@@ -144,6 +154,26 @@ test('public property details and student ratings omit private contact data', as
     Booking.findOne = originals.findOne;
     Recommendation.findOne = originals.recommendationFindOne;
     Recommendation.findOneAndUpdate = originals.recommendationUpdate;
+  }
+});
+
+test('public property details do not reveal pending or expired listings by direct id', async () => {
+  const originalFindById = Property.findById;
+  const property = makeProperty();
+  Property.findById = () => ({ populate: async () => property });
+  try {
+    for (const overrides of [
+      { approvalStatus: 'pending' },
+      { visibleUntil: new Date(Date.now() - 60_000) }
+    ]) {
+      Object.assign(property, overrides);
+      const response = makeResponse();
+      await getProperty({ params: { id: property._id } }, response);
+      assert.equal(response.statusCode, 404);
+      assert.equal(response.body.data, undefined);
+    }
+  } finally {
+    Property.findById = originalFindById;
   }
 });
 
@@ -216,15 +246,21 @@ test('admin detail access respects location scope and agents may edit only their
 test('property creation stores optional visibility and preserves Nigerian contact numbers as strings', async () => {
   const originals = {
     create: Property.create,
+    roomInsertMany: Room.insertMany,
     uploadStream: cloudinary.uploader.upload_stream
   };
   process.env.CLOUDINARY_CLOUD_NAME = 'test-cloud';
   process.env.CLOUDINARY_API_KEY = 'test-key';
   process.env.CLOUDINARY_API_SECRET = 'test-secret';
   const created = [];
+  let insertedInitialRooms;
   Property.create = async (data) => {
     created.push(data);
-    return data;
+    return { ...data, _id: '65d123456789012345678901', toObject() { return { ...this }; } };
+  };
+  Room.insertMany = async (documents) => {
+    insertedInitialRooms = documents;
+    return documents;
   };
   cloudinary.uploader.upload_stream = (options, callback) => new Writable({
     write(chunk, encoding, done) {
@@ -287,8 +323,46 @@ test('property creation stores optional visibility and preserves Nigerian contac
       user: { _id: 'agent-1', role: 'agent' }
     }, invalidDateResponse);
     assert.equal(invalidDateResponse.statusCode, 400);
+
+    const missingRoomsResponse = makeResponse();
+    await createProperty({
+      body: {
+        title: 'Synthetic Multi-Room Property',
+        description: 'Synthetic test property.',
+        location: 'Gandu',
+        type: 'Single Room',
+        price: '120000',
+        managementMode: 'multi_room'
+      },
+      user: { _id: 'agent-1', role: 'agent' }
+    }, missingRoomsResponse);
+    assert.equal(missingRoomsResponse.statusCode, 400);
+    assert.match(missingRoomsResponse.body.message, /must include/);
+
+    const multiRoomResponse = makeResponse();
+    await createProperty({
+      body: {
+        title: 'Synthetic Multi-Room Property',
+        description: 'Synthetic test property.',
+        location: 'Gandu',
+        type: 'Single Room',
+        price: '120000',
+        managementMode: 'multi_room',
+        initialRooms: JSON.stringify([
+          { roomNumber: 'A1', type: 'Single Room', price: 80000, toilet: 'private', facilities: ['Wardrobe'] },
+          { roomNumber: 'A2', type: 'Self-Contain', price: 120000, toilet: 'shared', facilities: [] }
+        ])
+      },
+      files: { images: [{ mimetype: 'image/jpeg', buffer: Buffer.from('synthetic image') }] },
+      user: { _id: 'agent-1', role: 'agent' }
+    }, multiRoomResponse);
+    assert.equal(multiRoomResponse.statusCode, 201);
+    assert.deepEqual(insertedInitialRooms.map((room) => room.roomNumber), ['A1', 'A2']);
+    assert.deepEqual(insertedInitialRooms.map((room) => room.price), [80000, 120000]);
+    assert.deepEqual(insertedInitialRooms[0].facilities, ['Wardrobe']);
   } finally {
     Property.create = originals.create;
+    Room.insertMany = originals.roomInsertMany;
     cloudinary.uploader.upload_stream = originals.uploadStream;
   }
 });

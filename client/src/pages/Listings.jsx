@@ -12,6 +12,7 @@ const Listings = () => {
   const [location, setLocation] = useState('');
   const [type, setType] = useState('');
   const [priceRange, setPriceRange] = useState('');
+  const [toilet, setToilet] = useState('');
   const [locationTracked, setLocationTracked] = useState(false);
 
   // Track user's geolocation on component mount
@@ -45,7 +46,7 @@ const Listings = () => {
       setLoading(true);
       try {
         const response = await api.get('/properties', { 
-          params: { search: query, location, type, priceRange, page: pagination.page }
+          params: { search: query, location, type, priceRange, toilet, page: pagination.page }
         });
         setProperties(response.data.data.properties);
         setPagination({
@@ -73,7 +74,7 @@ const Listings = () => {
       }
     };
     fetchProperties();
-  }, [query, location, type, priceRange, pagination.page]);
+  }, [query, location, type, priceRange, toilet, pagination.page]);
 
   const updateFilter = (setter, value) => {
     setPagination((current) => ({ ...current, page: 1 }));
@@ -95,7 +96,7 @@ const Listings = () => {
             {pagination.total} properties
           </div>
         </div>
-        <div className="mt-4 sm:mt-6 grid gap-2.5 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 sm:mt-6 grid gap-2.5 sm:gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <input
             placeholder="Search title"
             value={query}
@@ -132,6 +133,16 @@ const Listings = () => {
             <option value="0-50000">Under ₦50k</option>
             <option value="50000-150000">₦50k - ₦150k</option>
             <option value="150000-300000">₦150k+</option>
+          </select>
+          <select
+            value={toilet}
+            onChange={(e) => updateFilter(setToilet, e.target.value)}
+            className="w-full rounded-2xl sm:rounded-3xl border border-slate-200 bg-slate-50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+          >
+            <option value="">Any toilet setup</option>
+            <option value="private">Private toilet</option>
+            <option value="shared">Shared toilet</option>
+            <option value="none">No toilet</option>
           </select>
         </div>
       </div>

@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import Property from '../models/Property.js';
+import Room from '../models/Room.js';
 import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
 import PropertyEditHistory from '../models/PropertyEditHistory.js';
@@ -16,18 +18,42 @@ import {
   PROPERTY_MEDIA_LIMITS,
   resolvePropertyMediaOrder
 } from '../utils/propertyMedia.js';
+import { validateRoomInput } from '../utils/roomRules.js';
 
-const uploadPropertyMediaToCloudinary = async (files = []) => Promise.all(files.map(async (file) => {
-  const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
-  const result = await uploadBufferToCloudinary(file.buffer, {
-    folder: resourceType === 'video' ? 'fulafia-ams/properties/videos' : 'fulafia-ams/properties/images',
-    resourceType
-  });
-  return { url: result.secure_url, publicId: result.public_id, resourceType };
-}));
+const uploadPropertyMediaToCloudinary = async (files = []) => {
+  const uploaded = [];
+  try {
+    for (const file of files) {
+      const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
+      const result = await uploadBufferToCloudinary(file.buffer, {
+        folder: resourceType === 'video' ? 'fulafia-ams/properties/videos' : 'fulafia-ams/properties/images',
+        resourceType
+      });
+      uploaded.push({ url: result.secure_url, publicId: result.public_id, resourceType });
+    }
+    return uploaded;
+  } catch (error) {
+    await Promise.all(uploaded.map((media) => deleteCloudinaryAsset(media.publicId, media.resourceType)));
+    throw error;
+  }
+};
+
+const parseBuildingFacilities = (value) => {
+  if (value === undefined || value === null || value === '') return [];
+  let facilities = value;
+  if (typeof facilities === 'string') {
+    try {
+      facilities = JSON.parse(facilities);
+    } catch {
+      facilities = facilities.split(',');
+    }
+  }
+  if (!Array.isArray(facilities)) return null;
+  return facilities.map((item) => String(item).trim()).filter(Boolean).slice(0, 30);
+};
 
 export const listProperties = async (req, res) => {
-  const { search, location, type, priceRange, page = 1, limit = 12 } = req.query;
+  const { search, location, type, priceRange, toilet, page = 1, limit = 12 } = req.query;
   const filter = {
     approvalStatus: 'approved',
     isDeleted: { $ne: true },
@@ -49,11 +75,37 @@ export const listProperties = async (req, res) => {
       ? { $nin: ['Gandu', 'Maraba', 'Mararaba', 'Gimare', 'Bukan Kota', 'Bukan Koto', 'Akunza', 'Tudun Kauri'] }
       : { $regex: location, $options: 'i' };
   }
-  if (type) filter.type = type;
+  const roomFilter = { isActive: true, status: 'available' };
+  if (type) roomFilter.type = type;
+  const validToiletFilter = ['private', 'shared', 'none', 'unknown'].includes(toilet) ? toilet : null;
+  if (validToiletFilter) roomFilter.toilet = validToiletFilter;
+  let singleUnitPriceFilter;
   if (priceRange) {
     const [minPrice, maxPrice] = priceRange.split('-').map(Number);
-    if (!isNaN(minPrice)) filter.price = { ...filter.price, $gte: minPrice };
-    if (!isNaN(maxPrice)) filter.price = { ...filter.price, $lte: maxPrice };
+    const roomPriceFilter = {};
+    if (!isNaN(minPrice)) roomPriceFilter.$gte = minPrice;
+    if (!isNaN(maxPrice)) roomPriceFilter.$lte = maxPrice;
+    if (Object.keys(roomPriceFilter).length) {
+      roomFilter.price = roomPriceFilter;
+      singleUnitPriceFilter = { ...roomPriceFilter };
+    }
+  }
+  if (type || validToiletFilter || roomFilter.price) {
+    const matchingRoomPropertyIds = await Room.distinct('propertyId', roomFilter);
+    const propertyAlternatives = [{
+      managementMode: 'multi_room',
+      isUnavailable: { $ne: true },
+      availabilityStatus: { $ne: 'not_available' },
+      _id: { $in: matchingRoomPropertyIds }
+    }];
+    if (!validToiletFilter) {
+      propertyAlternatives.unshift({
+        managementMode: { $ne: 'multi_room' },
+        ...(type ? { type } : {}),
+        ...(singleUnitPriceFilter ? { price: singleUnitPriceFilter } : {})
+      });
+    }
+    filter.$and = [...(filter.$and || []), { $or: propertyAlternatives }];
   }
 
   const properties = await Property.find(filter)
@@ -62,14 +114,65 @@ export const listProperties = async (req, res) => {
     .skip((page - 1) * limit)
     .limit(Number(limit));
   const total = await Property.countDocuments(filter);
-  res.json({ data: { properties, total, page: Number(page), limit: Number(limit) } });
+  const multiRoomProperties = properties.filter((property) => property.managementMode === 'multi_room');
+  const summaries = multiRoomProperties.length ? await Room.aggregate([
+    { $match: { propertyId: { $in: multiRoomProperties.map((property) => property._id) } } },
+    {
+      $group: {
+        _id: '$propertyId',
+        activeRoomCount: { $sum: { $cond: [{ $eq: ['$isActive', true] }, 1, 0] } },
+        availableRoomCount: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'available'] }] }, 1, 0] } },
+        reservedRoomCount: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'reserved'] }] }, 1, 0] } },
+        occupiedRoomCount: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'occupied'] }] }, 1, 0] } },
+        unavailableRoomCount: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'unavailable'] }] }, 1, 0] } },
+        minimumAvailablePrice: { $min: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'available'] }] }, '$price', null] } },
+        maximumAvailablePrice: { $max: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'available'] }] }, '$price', null] } }
+      }
+    }
+  ]) : [];
+  const summaryByProperty = new Map(summaries.map((summary) => [summary._id.toString(), summary]));
+  const propertiesWithRoomSummary = properties.map((property) => {
+    const serialized = typeof property.toObject === 'function' ? property.toObject() : { ...property };
+    if (serialized.managementMode === 'multi_room') {
+      const summary = summaryByProperty.get(serialized._id.toString());
+      serialized.roomSummary = summary ? {
+        activeRoomCount: summary.activeRoomCount,
+        availableRoomCount: summary.availableRoomCount,
+        reservedRoomCount: summary.reservedRoomCount,
+        occupiedRoomCount: summary.occupiedRoomCount,
+        unavailableRoomCount: summary.unavailableRoomCount,
+        minimumAvailablePrice: summary.minimumAvailablePrice,
+        maximumAvailablePrice: summary.maximumAvailablePrice
+      } : {
+        activeRoomCount: 0,
+        availableRoomCount: 0,
+        reservedRoomCount: 0,
+        occupiedRoomCount: 0,
+        unavailableRoomCount: 0,
+        minimumAvailablePrice: null,
+        maximumAvailablePrice: null
+      };
+      if (serialized.isUnavailable || serialized.availabilityStatus === 'not_available') {
+        serialized.roomSummary.availableRoomCount = 0;
+        serialized.roomSummary.minimumAvailablePrice = null;
+        serialized.roomSummary.maximumAvailablePrice = null;
+      }
+    }
+    return serialized;
+  });
+  res.json({ data: { properties: propertiesWithRoomSummary, total, page: Number(page), limit: Number(limit) } });
 };
 
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).populate('agentId', 'name email');
   if (!property) return res.status(404).json({ message: 'Property not found' });
   if (property.isDeleted && req.user?.role !== 'admin') return res.status(404).json({ message: 'Property not found' });
-  if (req.user?.role === 'student' && (property.visibleUntil && property.visibleUntil <= new Date())) {
+  const isPropertyManager = req.user?.role === 'admin'
+    || (req.user?.role === 'agent' && (property.agentId?._id || property.agentId)?.toString() === req.user._id.toString());
+  if (!isPropertyManager && property.approvalStatus !== 'approved') {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  if (!isPropertyManager && property.visibleUntil && property.visibleUntil <= new Date()) {
     return res.status(404).json({ message: 'Property not found' });
   }
   if (req.user?.role === 'student') {
@@ -82,7 +185,15 @@ export const getProperty = async (req, res) => {
   const canViewPrivateContact = req.user?.role === 'admin'
     || (req.user?.role === 'agent' && agentId?.toString() === req.user._id.toString());
   const data = typeof property.toObject === 'function' ? property.toObject() : { ...property };
-  if (!canViewPrivateContact) delete data.adminContact;
+  if (!canViewPrivateContact) {
+    delete data.adminContact;
+    if (data.agentId && typeof data.agentId === 'object') {
+      data.agentId = { ...data.agentId };
+      for (const field of ['email', 'phone', 'contactPhone', 'whatsapp', 'mobile']) {
+        delete data.agentId[field];
+      }
+    }
+  }
   res.json({ data });
 };
 
@@ -100,6 +211,18 @@ export const createProperty = async (req, res) => {
   } = req.body;
   const isAdministrator = req.user.role === 'admin';
   const isSuperAdministrator = isSuperAdmin(req.user);
+  const managementMode = req.body.managementMode || 'single_unit';
+  const buildingFacilities = parseBuildingFacilities(req.body.buildingFacilities);
+  const addressDirections = String(req.body.addressDirections || '').trim();
+  if (!['single_unit', 'multi_room'].includes(managementMode)) {
+    return res.status(400).json({ message: 'Select a valid property management mode.' });
+  }
+  if (buildingFacilities === null || buildingFacilities.some((item) => item.length > 80)) {
+    return res.status(400).json({ message: 'Enter valid building facilities of no more than 80 characters each.' });
+  }
+  if (addressDirections.length > 1000) {
+    return res.status(400).json({ message: 'Property directions cannot exceed 1000 characters.' });
+  }
   if (isAdministrator && !isSuperAdministrator) {
     return res.status(403).json({ message: 'Only a Super Admin can create administrator-managed property listings.' });
   }
@@ -143,6 +266,25 @@ export const createProperty = async (req, res) => {
   if (!['available', 'not_available'].includes(availabilityStatus)) {
     return res.status(400).json({ message: 'Please select a valid property availability status.' });
   }
+  let initialRooms = req.body.initialRooms;
+  if (typeof initialRooms === 'string') {
+    try {
+      initialRooms = JSON.parse(initialRooms);
+    } catch {
+      return res.status(400).json({ message: 'Enter valid initial room information.' });
+    }
+  }
+  if (managementMode === 'multi_room') {
+    if (!Array.isArray(initialRooms) || initialRooms.length < 1 || initialRooms.length > 100) {
+      return res.status(400).json({ message: 'A multi-room property must include between 1 and 100 valid initial rooms.' });
+    }
+    const invalidRoom = initialRooms.map(validateRoomInput).find(Boolean);
+    if (invalidRoom) return res.status(400).json({ message: invalidRoom });
+    const labels = initialRooms.map((room) => String(room.roomNumber).trim().toUpperCase());
+    if (new Set(labels).size !== labels.length) {
+      return res.status(409).json({ message: 'Initial room labels must be unique within this property.' });
+    }
+  }
 
   const imageFiles = req.files?.images || [];
   const videoFiles = req.files?.videos || [];
@@ -156,7 +298,13 @@ export const createProperty = async (req, res) => {
   }
 
   const uploadedImages = await uploadPropertyMediaToCloudinary(imageFiles);
-  const uploadedVideos = await uploadPropertyMediaToCloudinary(videoFiles);
+  let uploadedVideos = [];
+  try {
+    uploadedVideos = await uploadPropertyMediaToCloudinary(videoFiles);
+  } catch (error) {
+    await Promise.all(uploadedImages.map((media) => deleteCloudinaryAsset(media.publicId, media.resourceType)));
+    throw error;
+  }
   const images = imageOrder.map((entry) => uploadedImages[Number(entry.slice('upload:'.length))]);
   const videos = videoOrder.map((entry) => uploadedVideos[Number(entry.slice('upload:'.length))]);
 
@@ -164,30 +312,74 @@ export const createProperty = async (req, res) => {
     return res.status(400).json({ message: 'Please upload at least one property image or video before listing this property.' });
   }
 
-  const property = await Property.create({
-    title,
-    description,
-    location: savedLocation,
-    locationCategory,
-    type,
-    price: commissionEstimate.propertyPrice,
-    inspectionFee,
-    images,
-    videos,
-    ownerType: isSuperAdministrator ? 'admin' : 'agent',
-    ...(isSuperAdministrator ? {} : { agentId: req.user._id }),
-    createdBy: req.user._id,
-    createdByRole: req.user.role,
-    approvalStatus: isSuperAdministrator ? 'approved' : 'pending',
-    ...(isSuperAdministrator ? { approvedBy: req.user._id, approvedAt: new Date() } : {}),
-    availabilityStatus,
-    isUnavailable: availabilityStatus === 'not_available',
-    ...(availabilityStatus === 'not_available' ? { availabilityReason: 'admin_disabled' } : {}),
-    visibleUntil: parsedVisibleUntil,
-    adminContact: {
-      contactPhone
+  let property;
+  let initialRoomIds = [];
+  try {
+    property = await Property.create({
+      title,
+      description,
+      location: savedLocation,
+      locationCategory,
+      type,
+      price: commissionEstimate.propertyPrice,
+      managementMode,
+      addressDirections,
+      buildingFacilities,
+      inspectionFee,
+      images,
+      videos,
+      ownerType: isSuperAdministrator ? 'admin' : 'agent',
+      ...(isSuperAdministrator ? {} : { agentId: req.user._id }),
+      createdBy: req.user._id,
+      createdByRole: req.user.role,
+      approvalStatus: isSuperAdministrator ? 'approved' : 'pending',
+      ...(isSuperAdministrator ? { approvedBy: req.user._id, approvedAt: new Date() } : {}),
+      availabilityStatus,
+      isUnavailable: availabilityStatus === 'not_available',
+      ...(availabilityStatus === 'not_available' ? { availabilityReason: 'admin_disabled' } : {}),
+      visibleUntil: parsedVisibleUntil,
+      adminContact: {
+        contactPhone
+      }
+    });
+    if (managementMode === 'multi_room') {
+      const roomDocuments = initialRooms.map((room) => {
+        const status = room.status || 'available';
+        return {
+          propertyId: property._id,
+          roomNumber: String(room.roomNumber).trim().toUpperCase(),
+          title: String(room.title || '').trim(),
+          description: String(room.description || '').trim(),
+          type: room.type,
+          price: Number(room.price),
+          billingPeriod: room.billingPeriod || 'yearly',
+          status,
+          statusReason: String(room.statusReason || '').trim(),
+          toilet: room.toilet || 'unknown',
+          shower: room.shower || 'unknown',
+          kitchen: room.kitchen || 'unknown',
+          waterSource: room.waterSource || 'unknown',
+          waterAvailable: room.waterAvailable ?? null,
+          electricity: room.electricity ?? null,
+          facilities: (room.facilities || []).map((item) => String(item).trim()).filter(Boolean),
+          floorSection: String(room.floorSection || '').trim(),
+          statusHistory: [{ to: status, reason: String(room.statusReason || '').trim(), changedBy: req.user._id }]
+        };
+      });
+      initialRoomIds = roomDocuments.map(() => new mongoose.Types.ObjectId());
+      roomDocuments.forEach((room, index) => { room._id = initialRoomIds[index]; });
+      await Room.insertMany(roomDocuments, { ordered: true });
     }
-  });
+  } catch (error) {
+    if (property) {
+      if (initialRoomIds.length) await Room.deleteMany({ _id: { $in: initialRoomIds } });
+      await Property.deleteOne({ _id: property._id });
+    }
+    await Promise.all([...images, ...videos].map((media) => (
+      deleteCloudinaryAsset(media.publicId, media.resourceType)
+    )));
+    throw error;
+  }
   if (isSuperAdministrator) {
     await recordAdminActivity(req.user, 'property_created', `Property ${property.title} was created by a Super Admin.`, {
       propertyId: property._id,
@@ -216,7 +408,10 @@ export const updateProperty = async (req, res) => {
     return res.status(403).json({ message: adminAccessMessage });
   }
 
-  const editableFields = ['title', 'description', 'location', 'type', 'price', 'visibleUntil'];
+  const editableFields = [
+    'title', 'description', 'location', 'type', 'price', 'visibleUntil',
+    'managementMode', 'addressDirections', 'buildingFacilities'
+  ];
   const updates = { approvalStatus: req.user.role === 'admin' && isSuperAdmin(req.user) ? property.approvalStatus : 'pending' };
   const changes = [];
   let commissionEstimate;
@@ -280,6 +475,25 @@ export const updateProperty = async (req, res) => {
   if (req.body.location !== undefined && !normalizePropertyLocation({ location: req.body.location, customLocation: req.body.customLocation })) {
     return res.status(400).json({ message: 'Please select a valid location.' });
   }
+  if (req.body.managementMode !== undefined) {
+    if (!['single_unit', 'multi_room'].includes(req.body.managementMode)) {
+      return res.status(400).json({ message: 'Select a valid property management mode.' });
+    }
+    if (req.body.managementMode === 'single_unit' && property.managementMode === 'multi_room') {
+      const activeRooms = await Room.exists({ propertyId: property._id, isActive: true });
+      if (activeRooms) return res.status(409).json({ message: 'Deactivate all rooms before changing this building to a single-unit listing.' });
+    }
+  }
+  if (req.body.addressDirections !== undefined && String(req.body.addressDirections).trim().length > 1000) {
+    return res.status(400).json({ message: 'Property directions cannot exceed 1000 characters.' });
+  }
+  if (req.body.buildingFacilities !== undefined) {
+    const buildingFacilities = parseBuildingFacilities(req.body.buildingFacilities);
+    if (buildingFacilities === null || buildingFacilities.some((item) => item.length > 80)) {
+      return res.status(400).json({ message: 'Enter valid building facilities of no more than 80 characters each.' });
+    }
+    req.body.buildingFacilities = buildingFacilities;
+  }
   const requestedLocation = req.body.location === undefined
     ? property.location
     : normalizePropertyLocation({ location: req.body.location, customLocation: req.body.customLocation });
@@ -302,7 +516,9 @@ export const updateProperty = async (req, res) => {
         ? normalizePropertyLocation({ location: req.body[field], customLocation: req.body.customLocation })
         : field === 'price'
           ? commissionEstimate.propertyPrice
-        : req.body[field];
+            : field === 'buildingFacilities'
+              ? parseBuildingFacilities(req.body[field])
+          : req.body[field];
     if (field === 'location' && !newValue) return;
     const oldValue = property[field];
     if (String(oldValue ?? '') !== String(newValue ?? '')) {
@@ -337,8 +553,15 @@ export const updateProperty = async (req, res) => {
     return res.status(400).json({ message: 'The selected media order is invalid. Please review the media selection and try again.' });
   }
 
-  const uploadedImages = await uploadPropertyMediaToCloudinary(imageFiles);
-  const uploadedVideos = await uploadPropertyMediaToCloudinary(videoFiles);
+  let uploadedImages = [];
+  let uploadedVideos = [];
+  try {
+    uploadedImages = await uploadPropertyMediaToCloudinary(imageFiles);
+    uploadedVideos = await uploadPropertyMediaToCloudinary(videoFiles);
+  } catch (error) {
+    await Promise.all(uploadedImages.map((media) => deleteCloudinaryAsset(media.publicId, media.resourceType)));
+    throw error;
+  }
   nextImages = imageOrder.map((entry) => {
     const [source, rawIndex] = entry.split(':');
     return source === 'existing' ? previousImages[Number(rawIndex)] : uploadedImages[Number(rawIndex)];

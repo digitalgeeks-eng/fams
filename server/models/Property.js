@@ -13,6 +13,9 @@ const propertySchema = new mongoose.Schema({
   description: { type: String, required: true, trim: true },
   location: { type: String, required: true, trim: true },
   locationCategory: { type: String, trim: true, index: true },
+  addressDirections: { type: String, trim: true, maxlength: 1000 },
+  managementMode: { type: String, enum: ['single_unit', 'multi_room'], default: 'single_unit', index: true },
+  buildingFacilities: [{ type: String, trim: true, maxlength: 80 }],
   type: { type: String, enum: ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'], required: true },
   price: { type: Number, required: true },
   inspectionFee: {
