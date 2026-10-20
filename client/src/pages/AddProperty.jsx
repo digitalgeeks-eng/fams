@@ -6,8 +6,43 @@ import { LEGACY_LOCATION_ALIASES, LOCATIONS } from '../constants/locations.js';
 import { calculatePropertyCommission, formatNairaAmount } from '../utils/propertyCommission.js';
 import { getLegacyContactConflict, getPropertyContactPhone } from '../utils/propertyContact.js';
 import { createMediaOrder, getEditablePropertyMedia, getMediaUrl, validatePropertyMediaFiles } from '../utils/propertyMedia.js';
+import {
+  applyRoomConfiguration,
+  hasRoomConfigurationChanges,
+  ROOM_CONFIGURATION_FIELDS
+} from '../utils/roomConfiguration.js';
 
 const PROPERTY_TYPES = ['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat'];
+const ROOM_CONFIGURATION_LABELS = {
+  title: 'Room title',
+  type: 'Room type',
+  description: 'Description',
+  price: 'Rental price',
+  billingPeriod: 'Billing period',
+  toilet: 'Toilet',
+  shower: 'Bathroom / shower',
+  kitchen: 'Kitchen',
+  waterSource: 'Water source',
+  waterAvailable: 'Water availability',
+  electricity: 'Electricity',
+  facilities: 'Facilities',
+  floorSection: 'Floor / section'
+};
+const EMPTY_ROOM_CONFIGURATION = {
+  title: '',
+  type: '',
+  description: '',
+  price: '',
+  billingPeriod: 'yearly',
+  toilet: 'unknown',
+  shower: 'unknown',
+  kitchen: 'unknown',
+  waterSource: 'unknown',
+  waterAvailable: '',
+  electricity: '',
+  facilities: '',
+  floorSection: ''
+};
 
 const MediaPreview = ({ kind, file, media, label }) => {
   const [previewUrl, setPreviewUrl] = useState('');
@@ -60,6 +95,9 @@ const AddProperty = () => {
   const [roomNumberPrefix, setRoomNumberPrefix] = useState('Room ');
   const [roomPrice, setRoomPrice] = useState('');
   const [roomOverrides, setRoomOverrides] = useState([]);
+  const [roomConfigurationMode, setRoomConfigurationMode] = useState('common');
+  const [commonRoomConfiguration, setCommonRoomConfiguration] = useState(EMPTY_ROOM_CONFIGURATION);
+  const [commonRoomFields, setCommonRoomFields] = useState(ROOM_CONFIGURATION_FIELDS);
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
@@ -183,28 +221,47 @@ const AddProperty = () => {
       setMessage('Room count must be a whole number between 0 and 100.');
       return;
     }
-    const initialRooms = Array.from({ length: roomCountValue }, (_, index) => ({
-      roomNumber: String(roomOverrides[index]?.roomNumber || `${roomNumberPrefix}${index + 1}`).trim(),
-      type: roomOverrides[index]?.type || form.type,
-      price: roomOverrides[index]?.price === '' || roomOverrides[index]?.price === undefined
-        ? Number(startingRoomPrice)
-        : Number(roomOverrides[index].price),
-      billingPeriod: 'yearly',
-      status: roomOverrides[index]?.status || 'available',
-      toilet: roomOverrides[index]?.toilet || 'unknown',
-      shower: roomOverrides[index]?.shower || 'unknown',
-      kitchen: roomOverrides[index]?.kitchen || 'unknown',
-      waterSource: roomOverrides[index]?.waterSource || 'unknown',
-      waterAvailable: roomOverrides[index]?.waterAvailable === '' || roomOverrides[index]?.waterAvailable === undefined
-        ? null
-        : roomOverrides[index].waterAvailable === 'true',
-      electricity: roomOverrides[index]?.electricity === '' || roomOverrides[index]?.electricity === undefined
-        ? null
-        : roomOverrides[index].electricity === 'true',
-      facilities: String(roomOverrides[index]?.facilities || '').split(',').map((item) => item.trim()).filter(Boolean),
-      floorSection: roomOverrides[index]?.floorSection || '',
-      description: roomOverrides[index]?.description || ''
-    }));
+    const commonValues = {
+      ...commonRoomConfiguration,
+      type: commonRoomConfiguration.type || form.type,
+      price: commonRoomConfiguration.price || startingRoomPrice
+    };
+    const initialRooms = Array.from({ length: roomCountValue }, (_, index) => {
+      const override = roomOverrides[index] || {};
+      const getValue = (field, fallback) => {
+        if (override[field] !== undefined) return override[field];
+        return roomConfigurationMode === 'common' && commonRoomFields.includes(field)
+          ? commonValues[field]
+          : fallback;
+      };
+      const priceInput = getValue(
+        'price',
+        roomConfigurationMode === 'individual' || commonRoomFields.includes('price') ? startingRoomPrice : ''
+      );
+      return {
+        roomNumber: String(override.roomNumber || `${roomNumberPrefix}${index + 1}`).trim(),
+        title: getValue('title', ''),
+        type: getValue('type', form.type) || form.type,
+        price: priceInput === '' || priceInput === undefined ? Number.NaN : Number(priceInput),
+        billingPeriod: getValue('billingPeriod', 'yearly') || 'yearly',
+        status: override.status || 'available',
+        toilet: getValue('toilet', 'unknown') || 'unknown',
+        shower: getValue('shower', 'unknown') || 'unknown',
+        kitchen: getValue('kitchen', 'unknown') || 'unknown',
+        waterSource: getValue('waterSource', 'unknown') || 'unknown',
+        waterAvailable: getValue('waterAvailable', null) === '' || getValue('waterAvailable', null) === null
+          ? null
+          : getValue('waterAvailable', null) === true || getValue('waterAvailable', null) === 'true',
+        electricity: getValue('electricity', null) === '' || getValue('electricity', null) === null
+          ? null
+          : getValue('electricity', null) === true || getValue('electricity', null) === 'true',
+        facilities: Array.isArray(getValue('facilities', []))
+          ? getValue('facilities', [])
+          : String(getValue('facilities', '') || '').split(',').map((item) => item.trim()).filter(Boolean),
+        floorSection: getValue('floorSection', '') || '',
+        description: getValue('description', '') || ''
+      };
+    });
     if (form.managementMode === 'multi_room' && initialRooms.some((room) => (
       !Number.isFinite(room.price) || room.price < 0
     ))) {
@@ -299,6 +356,48 @@ const AddProperty = () => {
     setter(reordered);
   };
 
+  const applyCommonRoomConfiguration = () => {
+    if (!commonRoomFields.length) {
+      setMessage('Select at least one room field to apply.');
+      return;
+    }
+    const commonValues = {
+      ...commonRoomConfiguration,
+      type: commonRoomConfiguration.type || form.type,
+      price: commonRoomConfiguration.price || roomPrice || form.price
+    };
+    const count = Math.min(Number(roomCount) || 0, 100);
+    const targets = Array.from({ length: count }, (_, index) => {
+      const existing = roomOverrides[index] || {};
+      const current = { ...commonValues, ...existing };
+      return current;
+    });
+    const replacements = targets.filter((current) => (
+      hasRoomConfigurationChanges(current, commonValues, commonRoomFields)
+    )).length;
+    if (replacements && !window.confirm(
+      `Replace the selected information on ${replacements} room${replacements === 1 ? '' : 's'}? Room numbers, availability, and media will not change.`
+    )) return;
+    setRoomOverrides((current) => Array.from({ length: count }, (_, index) => (
+      applyRoomConfiguration(current[index] || {}, commonValues, commonRoomFields)
+    )));
+    setMessage(`Applied ${commonRoomFields.length} selected field${commonRoomFields.length === 1 ? '' : 's'} to ${count} rooms. You can still customize each room below.`);
+  };
+
+  const updateRoomOverride = (index, field, value) => setRoomOverrides((current) => {
+    const next = [...current];
+    next[index] = { ...(next[index] || {}), [field]: value };
+    return next;
+  });
+  const roomReview = Array.from({ length: Math.max(0, Math.min(Number(roomCount) || 0, 100)) }, (_, index) => {
+    const room = roomOverrides[index] || {};
+    return {
+      number: room.roomNumber || `${roomNumberPrefix}${index + 1}`,
+      type: room.type || form.type || 'Type not selected',
+      price: room.price ?? roomPrice ?? form.price
+    };
+  });
+
   return (
     <section className="max-w-3xl mx-auto space-y-6">
       <h1 className="text-2xl font-semibold">{isEditMode ? 'Edit Property' : 'Add Property'}</h1>
@@ -382,7 +481,17 @@ const AddProperty = () => {
         {form.managementMode === 'multi_room' && !isEditMode && (
           <section className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
             <h2 className="font-semibold text-slate-900">Initial room setup</h2>
-            <p className="text-sm text-slate-600">Create identical rooms quickly. You can set different prices, facilities, availability, and media for each room afterward.</p>
+            <p className="text-sm text-slate-600">Choose common room information for a quick setup, or configure each room individually. You can switch modes without losing your entries.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                <input type="radio" name="roomConfigurationMode" value="common" checked={roomConfigurationMode === 'common'} onChange={() => setRoomConfigurationMode('common')} />
+                <span><strong className="block text-slate-900">Apply common information</strong><span className="text-slate-600">Enter shared details once, then apply selected fields to all rooms.</span></span>
+              </label>
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                <input type="radio" name="roomConfigurationMode" value="individual" checked={roomConfigurationMode === 'individual'} onChange={() => setRoomConfigurationMode('individual')} />
+                <span><strong className="block text-slate-900">Configure each room individually</strong><span className="text-slate-600">Set different information for every room.</span></span>
+              </label>
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-sm text-slate-700">
                 Number of rooms
@@ -412,45 +521,126 @@ const AddProperty = () => {
                 <input type="number" min="0" step="0.01" value={roomPrice || form.price} onChange={(e) => setRoomPrice(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" />
               </label>
             </div>
+            {roomConfigurationMode === 'common' && (
+              <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+                <h3 className="font-semibold text-slate-900">Common room information</h3>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <label className="text-sm text-slate-700">Room type
+                    <select value={commonRoomConfiguration.type || form.type} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, type: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                      <option value="">Select type</option>
+                      {PROPERTY_TYPES.map((type) => <option key={type}>{type}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm text-slate-700">Rent (₦)
+                    <input type="number" min="0" step="0.01" value={commonRoomConfiguration.price || roomPrice || form.price} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, price: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+                  </label>
+                  <label className="text-sm text-slate-700">Billing period
+                    <select value={commonRoomConfiguration.billingPeriod} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, billingPeriod: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                      {['yearly', 'monthly', 'weekly', 'daily'].map((period) => <option key={period}>{period}</option>)}
+                    </select>
+                  </label>
+                  {['toilet', 'shower', 'kitchen'].map((field) => (
+                    <label key={field} className="text-sm capitalize text-slate-700">{field === 'shower' ? 'Bathroom / shower' : field}
+                      <select value={commonRoomConfiguration[field]} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                        {['unknown', 'private', 'shared', 'none'].map((value) => <option key={value}>{value}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                  <label className="text-sm text-slate-700">Water source
+                    <select value={commonRoomConfiguration.waterSource} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, waterSource: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                      {['unknown', 'tap', 'borehole', 'well', 'other', 'unavailable'].map((value) => <option key={value}>{value}</option>)}
+                    </select>
+                  </label>
+                  {[
+                    ['waterAvailable', 'Water available'],
+                    ['electricity', 'Electricity available']
+                  ].map(([field, label]) => (
+                    <label key={field} className="text-sm text-slate-700">{label}
+                      <select value={commonRoomConfiguration[field]} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                        <option value="">Unknown</option><option value="true">Yes</option><option value="false">No</option>
+                      </select>
+                    </label>
+                  ))}
+                  <label className="text-sm text-slate-700">Facilities (comma separated)
+                    <input value={commonRoomConfiguration.facilities} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, facilities: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+                  </label>
+                  <label className="text-sm text-slate-700">Floor / section
+                    <input value={commonRoomConfiguration.floorSection} maxLength={80} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, floorSection: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+                  </label>
+                </div>
+                <label className="block text-sm text-slate-700">Room description
+                  <textarea value={commonRoomConfiguration.description} maxLength={2000} rows={3} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, description: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+                </label>
+                <label className="block text-sm text-slate-700">Room title (optional)
+                  <input value={commonRoomConfiguration.title} maxLength={120} onChange={(event) => setCommonRoomConfiguration((current) => ({ ...current, title: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+                </label>
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-semibold text-slate-800">Choose fields to apply</legend>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {ROOM_CONFIGURATION_FIELDS.map((field) => (
+                      <label key={field} className="flex items-center gap-2 text-sm text-slate-700">
+                        <input type="checkbox" checked={commonRoomFields.includes(field)} onChange={(event) => setCommonRoomFields((current) => event.target.checked
+                          ? [...current, field]
+                          : current.filter((item) => item !== field))} />
+                        {ROOM_CONFIGURATION_LABELS[field]}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <button type="button" onClick={applyCommonRoomConfiguration} disabled={!Number(roomCount)} className="rounded-xl bg-primary px-4 py-2 font-semibold text-white disabled:opacity-50">
+                  Apply selected information to all rooms
+                </button>
+              </div>
+            )}
             {Number(roomCount) > 0 && Number(roomCount) <= 100 && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-800">Initial room details</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Individual room review and customization</h3>
                 {Array.from({ length: Number(roomCount) }, (_, index) => {
                   const room = roomOverrides[index] || {};
-                  const updateRoom = (field, value) => setRoomOverrides((current) => {
-                    const next = [...current];
-                    next[index] = { ...(next[index] || {}), [field]: value };
-                    return next;
-                  });
                   return (
                     <fieldset key={index} className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-2 lg:grid-cols-4">
                       <legend className="px-1 text-xs font-medium text-slate-500">Room {index + 1}</legend>
                       <label className="text-xs text-slate-700">Room number
-                        <input value={room.roomNumber ?? `${roomNumberPrefix}${index + 1}`} onChange={(event) => updateRoom('roomNumber', event.target.value)} maxLength={40} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
+                        <input value={room.roomNumber ?? `${roomNumberPrefix}${index + 1}`} onChange={(event) => updateRoomOverride(index, 'roomNumber', event.target.value)} maxLength={40} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
                       </label>
                       <label className="text-xs text-slate-700">Room type
-                        <select value={room.type || form.type} onChange={(event) => updateRoom('type', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" required>
+                        <select value={room.type ?? form.type} onChange={(event) => updateRoomOverride(index, 'type', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" required>
                           <option value="">Select type</option>
                           {PROPERTY_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                         </select>
                       </label>
-                      <label className="text-xs text-slate-700">Rent per year (₦)
-                        <input type="number" min="0" step="0.01" value={room.price ?? (roomPrice || form.price)} onChange={(event) => updateRoom('price', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
+                      <label className="text-xs text-slate-700">Rent (₦)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={room.price ?? (roomConfigurationMode === 'common'
+                            ? commonRoomFields.includes('price') ? commonRoomConfiguration.price || roomPrice || form.price : ''
+                            : roomPrice || form.price)}
+                          onChange={(event) => updateRoomOverride(index, 'price', event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                          required
+                        />
+                      </label>
+                      <label className="text-xs text-slate-700">Billing period
+                        <select value={room.billingPeriod ?? 'yearly'} onChange={(event) => updateRoomOverride(index, 'billingPeriod', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                          {['yearly', 'monthly', 'weekly', 'daily'].map((period) => <option key={period}>{period}</option>)}
+                        </select>
                       </label>
                       {['toilet', 'shower', 'kitchen'].map((facility) => (
                         <label key={facility} className="text-xs capitalize text-slate-700">{facility}
-                          <select value={room[facility] || 'unknown'} onChange={(event) => updateRoom(facility, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                          <select value={room[facility] ?? 'unknown'} onChange={(event) => updateRoomOverride(index, facility, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                             {['unknown', 'private', 'shared', 'none'].map((option) => <option key={option} value={option}>{option}</option>)}
                           </select>
                         </label>
                       ))}
                       <label className="text-xs text-slate-700">Availability
-                        <select value={room.status || 'available'} onChange={(event) => updateRoom('status', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                        <select value={room.status || 'available'} onChange={(event) => updateRoomOverride(index, 'status', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                           {['available', 'reserved', 'occupied', 'unavailable'].map((status) => <option key={status} value={status}>{status}</option>)}
                         </select>
                       </label>
                       <label className="text-xs text-slate-700">Water source
-                        <select value={room.waterSource || 'unknown'} onChange={(event) => updateRoom('waterSource', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                        <select value={room.waterSource ?? 'unknown'} onChange={(event) => updateRoomOverride(index, 'waterSource', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                           {['unknown', 'tap', 'borehole', 'well', 'other', 'unavailable'].map((source) => <option key={source}>{source}</option>)}
                         </select>
                       </label>
@@ -459,7 +649,7 @@ const AddProperty = () => {
                         ['electricity', 'Electricity available']
                       ].map(([field, label]) => (
                         <label key={field} className="text-xs text-slate-700">{label}
-                          <select value={room[field] || ''} onChange={(event) => updateRoom(field, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                          <select value={room[field] ?? ''} onChange={(event) => updateRoomOverride(index, field, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                             <option value="">Unknown</option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>
@@ -467,17 +657,28 @@ const AddProperty = () => {
                         </label>
                       ))}
                       <label className="text-xs text-slate-700">Facilities (comma separated)
-                        <input value={room.facilities || ''} onChange={(event) => updateRoom('facilities', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                        <input value={room.facilities ?? ''} onChange={(event) => updateRoomOverride(index, 'facilities', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                       </label>
                       <label className="text-xs text-slate-700">Floor / section
-                        <input value={room.floorSection || ''} onChange={(event) => updateRoom('floorSection', event.target.value)} maxLength={80} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                        <input value={room.floorSection ?? ''} onChange={(event) => updateRoomOverride(index, 'floorSection', event.target.value)} maxLength={80} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                       </label>
                       <label className="text-xs text-slate-700">Room description
-                        <input value={room.description || ''} onChange={(event) => updateRoom('description', event.target.value)} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                        <input value={room.description ?? ''} onChange={(event) => updateRoomOverride(index, 'description', event.target.value)} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      </label>
+                      <label className="text-xs text-slate-700">Room title
+                        <input value={room.title ?? ''} onChange={(event) => updateRoomOverride(index, 'title', event.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                       </label>
                     </fieldset>
                   );
                 })}
+                <aside className="rounded-xl bg-slate-50 p-3" aria-live="polite">
+                  <h4 className="text-sm font-semibold text-slate-800">Review summary: {roomReview.length} room{roomReview.length === 1 ? '' : 's'}</h4>
+                  <ul className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
+                    {roomReview.map((room, index) => (
+                      <li key={`${index}-${room.number}`} className="truncate">{room.number} · {room.type} · {room.price ? `₦${Number(room.price).toLocaleString()}` : 'Rent not set'}</li>
+                    ))}
+                  </ul>
+                </aside>
               </div>
             )}
           </section>

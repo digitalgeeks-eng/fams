@@ -4,10 +4,17 @@ import api from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { validateRoomMediaFiles } from '../utils/propertyMedia.js';
+import {
+  applyRoomConfiguration,
+  getRoomConfiguration,
+  hasRoomConfigurationChanges,
+  ROOM_CONFIGURATION_FIELDS
+} from '../utils/roomConfiguration.js';
 
 const EMPTY_FORM = {
   roomNumberPrefix: 'Room ',
   count: '1',
+  title: '',
   type: 'Single Room',
   price: '',
   billingPeriod: 'yearly',
@@ -20,6 +27,22 @@ const EMPTY_FORM = {
   facilities: '',
   floorSection: '',
   description: ''
+};
+
+const ROOM_FIELD_LABELS = {
+  title: 'Room title',
+  type: 'Room type',
+  description: 'Description',
+  price: 'Rent',
+  billingPeriod: 'Billing period',
+  toilet: 'Toilet',
+  shower: 'Bathroom / shower',
+  kitchen: 'Kitchen',
+  waterSource: 'Water source',
+  waterAvailable: 'Water availability',
+  electricity: 'Electricity',
+  facilities: 'Facilities',
+  floorSection: 'Floor / section'
 };
 
 const getRoomDraft = (room) => ({
@@ -36,6 +59,10 @@ const RoomManagement = () => {
   const [requests, setRequests] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [roomOverrides, setRoomOverrides] = useState([]);
+  const [configurationMode, setConfigurationMode] = useState('common');
+  const [selectedConfigurationFields, setSelectedConfigurationFields] = useState(ROOM_CONFIGURATION_FIELDS);
+  const [selectedRoomIds, setSelectedRoomIds] = useState(null);
+  const [copySourceId, setCopySourceId] = useState('');
   const [draft, setDraft] = useState(null);
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
@@ -54,7 +81,11 @@ const RoomManagement = () => {
       api.get(`/properties/${id}/room-inspection-requests`)
     ]);
     setProperty(propertyResponse.data.data);
-    setRooms(roomResponse.data.data.rooms || []);
+    const loadedRooms = roomResponse.data.data.rooms || [];
+    setRooms(loadedRooms);
+    setSelectedRoomIds((current) => current === null
+      ? loadedRooms.filter((room) => room.isActive).map((room) => room._id)
+      : current.filter((roomId) => loadedRooms.some((room) => room._id === roomId && room.isActive)));
     setRequests(requestResponse.data.data || []);
   }, [id]);
 
@@ -94,17 +125,19 @@ const RoomManagement = () => {
     setMessage('');
   };
 
+  const getNewRoomFieldValue = (override, field, fallback) => {
+    if (override[field] !== undefined) return override[field];
+    return configurationMode === 'individual' || selectedConfigurationFields.includes(field)
+      ? form[field]
+      : fallback;
+  };
+
   const handleCreate = async (event) => {
     event.preventDefault();
     if (saving) return;
     const count = Number(form.count);
-    const price = Number(form.price);
     if (!Number.isInteger(count) || count < 1 || count > 100) {
       setMessage('Add between 1 and 100 rooms at a time.');
-      return;
-    }
-    if (!Number.isFinite(price) || price < 0 || !form.price.trim()) {
-      setMessage('Enter a valid non-negative room rent.');
       return;
     }
     const validation = validateRoomMediaFiles(images, videos);
@@ -120,29 +153,31 @@ const RoomManagement = () => {
     const data = new FormData();
     const roomInputs = Array.from({ length: count }, (_, index) => {
       const override = roomOverrides[index] || {};
+      const priceInput = getNewRoomFieldValue(override, 'price', '');
       return {
         roomNumber: String(override.roomNumber || `${form.roomNumberPrefix}${index + 1}`).trim(),
-        type: override.type || form.type,
-        price: override.price === undefined || override.price === '' ? price : Number(override.price),
-        billingPeriod: override.billingPeriod || form.billingPeriod,
+        title: getNewRoomFieldValue(override, 'title', ''),
+        type: getNewRoomFieldValue(override, 'type', 'Single Room'),
+        price: priceInput === '' || priceInput === undefined ? Number.NaN : Number(priceInput),
+        billingPeriod: getNewRoomFieldValue(override, 'billingPeriod', 'yearly') || 'yearly',
         status: override.status || 'available',
-        toilet: override.toilet || form.toilet,
-        shower: override.shower || form.shower,
-        kitchen: override.kitchen || form.kitchen,
-        waterSource: override.waterSource || form.waterSource,
-        waterAvailable: override.waterAvailable === undefined
-          ? (form.waterAvailable === '' ? null : form.waterAvailable === 'true')
-          : override.waterAvailable === '' ? null : override.waterAvailable === 'true',
-        electricity: override.electricity === undefined
-          ? (form.electricity === '' ? null : form.electricity === 'true')
-          : override.electricity === '' ? null : override.electricity === 'true',
-        facilities: override.facilities === undefined
-          ? form.facilities.split(',').map((item) => item.trim()).filter(Boolean)
-          : String(override.facilities).split(',').map((item) => item.trim()).filter(Boolean),
-        floorSection: override.floorSection ?? form.floorSection,
-        description: override.description ?? form.description
+        toilet: getNewRoomFieldValue(override, 'toilet', 'unknown') || 'unknown',
+        shower: getNewRoomFieldValue(override, 'shower', 'unknown') || 'unknown',
+        kitchen: getNewRoomFieldValue(override, 'kitchen', 'unknown') || 'unknown',
+        waterSource: getNewRoomFieldValue(override, 'waterSource', 'unknown') || 'unknown',
+        waterAvailable: getNewRoomFieldValue(override, 'waterAvailable', null) === '' ? null : getNewRoomFieldValue(override, 'waterAvailable', null) === true || getNewRoomFieldValue(override, 'waterAvailable', null) === 'true',
+        electricity: getNewRoomFieldValue(override, 'electricity', null) === '' ? null : getNewRoomFieldValue(override, 'electricity', null) === true || getNewRoomFieldValue(override, 'electricity', null) === 'true',
+        facilities: Array.isArray(getNewRoomFieldValue(override, 'facilities', []))
+          ? getNewRoomFieldValue(override, 'facilities', [])
+          : String(getNewRoomFieldValue(override, 'facilities', '') || '').split(',').map((item) => item.trim()).filter(Boolean),
+        floorSection: getNewRoomFieldValue(override, 'floorSection', '') || '',
+        description: getNewRoomFieldValue(override, 'description', '') || ''
       };
     });
+    if (roomInputs.some((room) => !Number.isFinite(room.price) || room.price < 0)) {
+      setMessage('Enter a valid non-negative rent for every room.');
+      return;
+    }
     data.append('rooms', JSON.stringify(roomInputs));
     images.forEach((file) => data.append('images', file));
     videos.forEach((file) => data.append('videos', file));
@@ -157,6 +192,88 @@ const RoomManagement = () => {
       await loadData();
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to add rooms.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyCommonToNewRooms = () => {
+    if (configurationMode !== 'common') {
+      setMessage('Switch to common information mode to apply fields to newly added rooms.');
+      return;
+    }
+    const count = Number(form.count);
+    if (!Number.isInteger(count) || count < 1 || count > 100 || !selectedConfigurationFields.length) {
+      setMessage('Select at least one field and enter a room count between 1 and 100.');
+      return;
+    }
+    const replacements = Array.from({ length: count }, (_, index) => {
+      const current = { ...form, ...(roomOverrides[index] || {}) };
+      return hasRoomConfigurationChanges(current, form, selectedConfigurationFields);
+    }).filter(Boolean).length;
+    if (replacements && !window.confirm(
+      `Replace the selected information on ${replacements} room${replacements === 1 ? '' : 's'}? Room numbers and availability will not change.`
+    )) return;
+    setRoomOverrides((current) => Array.from({ length: count }, (_, index) => (
+      applyRoomConfiguration(current[index] || {}, form, selectedConfigurationFields)
+    )));
+    setMessage(`Applied ${selectedConfigurationFields.length} selected field${selectedConfigurationFields.length === 1 ? '' : 's'} to ${count} rooms. Each room can still be customized individually.`);
+  };
+
+  const applyCommonToExistingRooms = async () => {
+    if (configurationMode !== 'common') {
+      setMessage('Switch to common information mode before applying fields to existing rooms.');
+      return;
+    }
+    const targets = rooms.filter((room) => selectedRoomIds?.includes(room._id) && room.isActive);
+    if (!targets.length) {
+      setMessage('Select at least one active room to update.');
+      return;
+    }
+    if (!selectedConfigurationFields.length) {
+      setMessage('Select at least one field to apply.');
+      return;
+    }
+    const values = Object.fromEntries(selectedConfigurationFields.map((field) => [field, form[field]]));
+    if (selectedConfigurationFields.includes('price')) values.price = Number(form.price);
+    if (selectedConfigurationFields.includes('facilities')) {
+      values.facilities = String(form.facilities || '').split(',').map((item) => item.trim()).filter(Boolean);
+    }
+    for (const field of ['waterAvailable', 'electricity']) {
+      if (selectedConfigurationFields.includes(field)) {
+        values[field] = form[field] === '' ? null : form[field] === true || form[field] === 'true';
+      }
+    }
+    if (selectedConfigurationFields.includes('price')
+      && (!form.price.trim() || !Number.isFinite(values.price) || values.price < 0)) {
+      setMessage('Enter a valid non-negative rent before applying it to existing rooms.');
+      return;
+    }
+    const changedTargets = targets.filter((room) => hasRoomConfigurationChanges(room, values, selectedConfigurationFields));
+    if (!changedTargets.length) {
+      setMessage('The selected rooms already have these values.');
+      return;
+    }
+    const selectedLabels = changedTargets.map((room) => room.roomNumber).join(', ');
+    if (!window.confirm(
+      `Apply the common values to ${changedTargets.length} selected room${changedTargets.length === 1 ? '' : 's'} (${selectedLabels})? Only the selected information fields will change. Room numbers, status, media, and inspection requests will be preserved.`
+    )) return;
+
+    setSaving(true);
+    try {
+      const results = await Promise.allSettled(changedTargets.map((room) => {
+        const payload = Object.fromEntries(selectedConfigurationFields.map((field) => [field, values[field]]));
+        return api.put(`/properties/${id}/rooms/${room._id}`, payload);
+      }));
+      const failures = results
+        .map((result, index) => (result.status === 'rejected' ? changedTargets[index].roomNumber : null))
+        .filter(Boolean);
+      await loadData();
+      setMessage(failures.length
+        ? `Some rooms could not be updated (${failures.join(', ')}). Successful updates were saved; review the list and retry failed rooms.`
+        : `Updated ${changedTargets.length} room${changedTargets.length === 1 ? '' : 's'}. Status, media, and inspection requests were preserved.`);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to refresh rooms after applying common information.');
     } finally {
       setSaving(false);
     }
@@ -230,6 +347,37 @@ const RoomManagement = () => {
     }
   };
 
+  const startEditingRoom = (room) => {
+    setDraft(getRoomDraft(room));
+    setCopySourceId('');
+    setEditImages([]);
+    setEditVideos([]);
+    setKeptImageIndexes((room.images || []).map((_, index) => index));
+    setKeptVideoIndexes((room.videos || []).map((_, index) => index));
+  };
+
+  const copyRoomDetails = () => {
+    const source = rooms.find((room) => room._id === copySourceId);
+    if (!draft || !source) return;
+    const values = getRoomConfiguration(source);
+    if (hasRoomConfigurationChanges(draft, values, ROOM_CONFIGURATION_FIELDS)
+      && !window.confirm(`Copy details from ${source.roomNumber}? Your current selected room details will be replaced. Its number, availability, media, and inspection requests will remain unchanged.`)) return;
+    setDraft((current) => ({
+      ...applyRoomConfiguration(current, {
+        ...values,
+        facilities: Array.isArray(values.facilities) ? values.facilities.join(', ') : values.facilities
+      }, ROOM_CONFIGURATION_FIELDS),
+      _id: current._id,
+      propertyId: current.propertyId,
+      roomNumber: current.roomNumber,
+      status: current.status,
+      isActive: current.isActive,
+      images: current.images,
+      videos: current.videos,
+      statusHistory: current.statusHistory
+    }));
+  };
+
   if (loading) return <LoadingSpinner />;
 
   const isAgentOwner = user?.role === 'agent'
@@ -250,8 +398,18 @@ const RoomManagement = () => {
 
       <section className="rounded-3xl bg-white p-6 shadow-card ring-1 ring-slate-200">
         <h2 className="text-lg font-semibold text-slate-900">Add rooms</h2>
-        <p className="mt-1 text-sm text-slate-600">Generate identical rooms quickly, then adjust them individually below.</p>
+        <p className="mt-1 text-sm text-slate-600">Choose shared information for a quick setup or configure every room separately. Switching modes keeps your current entries.</p>
         <form className="mt-4 space-y-4" onSubmit={handleCreate}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-3 text-sm">
+              <input type="radio" name="roomConfigurationMode" value="common" checked={configurationMode === 'common'} onChange={() => setConfigurationMode('common')} />
+              <span><strong className="block text-slate-900">Apply common information</strong><span className="text-slate-600">Use selected fields as the starting information for this batch.</span></span>
+            </label>
+            <label className="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-3 text-sm">
+              <input type="radio" name="roomConfigurationMode" value="individual" checked={configurationMode === 'individual'} onChange={() => setConfigurationMode('individual')} />
+              <span><strong className="block text-slate-900">Configure each room individually</strong><span className="text-slate-600">Edit each room’s own fields before saving.</span></span>
+            </label>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-sm text-slate-700">Room label prefix
               <input value={form.roomNumberPrefix} maxLength={30} onChange={(event) => setForm({ ...form, roomNumberPrefix: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
@@ -281,7 +439,10 @@ const RoomManagement = () => {
               </select>
             </label>
             <label className="text-sm text-slate-700">Rent (₦)
-              <input type="number" min="0" step="0.01" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" required />
+              <input type="number" min="0" step="0.01" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+            </label>
+            <label className="text-sm text-slate-700">Room title (optional)
+              <input value={form.title} maxLength={120} onChange={(event) => setForm({ ...form, title: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
             </label>
           </div>
           <details className="rounded-xl border border-slate-200 p-3">
@@ -301,22 +462,32 @@ const RoomManagement = () => {
                       <input value={override.roomNumber ?? `${form.roomNumberPrefix}${index + 1}`} onChange={(event) => updateOverride('roomNumber', event.target.value)} maxLength={40} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
                     </label>
                     <label className="text-xs text-slate-700">Room type
-                      <select value={override.type || form.type} onChange={(event) => updateOverride('type', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                      <select value={getNewRoomFieldValue(override, 'type', 'Single Room')} onChange={(event) => updateOverride('type', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                         {['Single Room', 'Self-Contain', 'Room and Parlour', 'Mini Flat', 'Other'].map((type) => <option key={type}>{type}</option>)}
                       </select>
                     </label>
                     <label className="text-xs text-slate-700">Rent (₦)
-                      <input type="number" min="0" step="0.01" value={override.price ?? form.price} onChange={(event) => updateOverride('price', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
+                      <input type="number" min="0" step="0.01" value={getNewRoomFieldValue(override, 'price', '')} onChange={(event) => updateOverride('price', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" required />
+                    </label>
+                    <label className="text-xs text-slate-700">Billing period
+                      <select value={getNewRoomFieldValue(override, 'billingPeriod', 'yearly')} onChange={(event) => updateOverride('billingPeriod', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                        {['yearly', 'monthly', 'weekly', 'daily'].map((period) => <option key={period}>{period}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs text-slate-700">Availability
+                      <select value={override.status ?? 'available'} onChange={(event) => updateOverride('status', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                        {['available', 'reserved', 'occupied', 'unavailable'].map((status) => <option key={status}>{status}</option>)}
+                      </select>
                     </label>
                     {['toilet', 'shower', 'kitchen'].map((facility) => (
                       <label key={facility} className="text-xs capitalize text-slate-700">{facility}
-                        <select value={override[facility] || form[facility]} onChange={(event) => updateOverride(facility, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                        <select value={getNewRoomFieldValue(override, facility, 'unknown')} onChange={(event) => updateOverride(facility, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                           {['unknown', 'private', 'shared', 'none'].map((option) => <option key={option}>{option}</option>)}
                         </select>
                       </label>
                     ))}
                     <label className="text-xs text-slate-700">Water source
-                      <select value={override.waterSource || form.waterSource} onChange={(event) => updateOverride('waterSource', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                      <select value={getNewRoomFieldValue(override, 'waterSource', 'unknown')} onChange={(event) => updateOverride('waterSource', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                         {['unknown', 'tap', 'borehole', 'well', 'other', 'unavailable'].map((source) => <option key={source}>{source}</option>)}
                       </select>
                     </label>
@@ -325,7 +496,7 @@ const RoomManagement = () => {
                       ['electricity', 'Electricity available']
                     ].map(([field, label]) => (
                       <label key={field} className="text-xs text-slate-700">{label}
-                        <select value={override[field] === undefined ? form[field] : override[field]} onChange={(event) => updateOverride(field, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                        <select value={getNewRoomFieldValue(override, field, '')} onChange={(event) => updateOverride(field, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
                           <option value="">Unknown</option>
                           <option value="true">Yes</option>
                           <option value="false">No</option>
@@ -333,13 +504,16 @@ const RoomManagement = () => {
                       </label>
                     ))}
                     <label className="text-xs text-slate-700">Facilities
-                      <input value={override.facilities ?? form.facilities} onChange={(event) => updateOverride('facilities', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      <input value={getNewRoomFieldValue(override, 'facilities', '')} onChange={(event) => updateOverride('facilities', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                     </label>
                     <label className="text-xs text-slate-700">Floor / section
-                      <input value={override.floorSection ?? form.floorSection} onChange={(event) => updateOverride('floorSection', event.target.value)} maxLength={80} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      <input value={getNewRoomFieldValue(override, 'floorSection', '')} onChange={(event) => updateOverride('floorSection', event.target.value)} maxLength={80} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                     </label>
                     <label className="text-xs text-slate-700">Room description
-                      <input value={override.description ?? form.description} onChange={(event) => updateOverride('description', event.target.value)} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                      <input value={getNewRoomFieldValue(override, 'description', '')} onChange={(event) => updateOverride('description', event.target.value)} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                    </label>
+                    <label className="text-xs text-slate-700">Room title
+                      <input value={getNewRoomFieldValue(override, 'title', '')} onChange={(event) => updateOverride('title', event.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                     </label>
                   </fieldset>
                 );
@@ -390,6 +564,24 @@ const RoomManagement = () => {
           <label className="block text-sm text-slate-700">Description
             <textarea value={form.description} maxLength={2000} rows={3} onChange={(event) => setForm({ ...form, description: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
           </label>
+          {configurationMode === 'common' && (
+            <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <legend className="px-1 text-sm font-semibold text-slate-800">Fields to apply</legend>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {ROOM_CONFIGURATION_FIELDS.map((field) => (
+                  <label key={field} className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={selectedConfigurationFields.includes(field)} onChange={(event) => setSelectedConfigurationFields((current) => event.target.checked
+                      ? [...current, field]
+                      : current.filter((item) => item !== field))} />
+                    {ROOM_FIELD_LABELS[field]}
+                  </label>
+                ))}
+              </div>
+              <button type="button" onClick={applyCommonToNewRooms} disabled={saving} className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">
+                Apply selected information to new rooms
+              </button>
+            </fieldset>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm text-slate-700">Room photos
               <input type="file" multiple accept="image/*" onChange={(event) => handleFiles(event, 'images')} className="mt-1 block w-full text-sm" />
@@ -403,6 +595,32 @@ const RoomManagement = () => {
         </form>
       </section>
 
+      <section className="space-y-3 rounded-3xl bg-white p-5 shadow-card ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Apply common information to existing rooms</h2>
+            <p className="mt-1 text-sm text-slate-600">Choose active rooms and fields. Status, room numbers, media, and inspection requests are never included.</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={activeRooms.length > 0 && selectedRoomIds?.length === activeRooms.length}
+              onChange={(event) => setSelectedRoomIds(event.target.checked ? activeRooms.map((room) => room._id) : [])}
+            />
+            Select all active rooms ({activeRooms.length})
+          </label>
+        </div>
+        <p className="text-sm text-slate-600">{selectedRoomIds?.length || 0} rooms selected</p>
+        <button
+          type="button"
+          onClick={applyCommonToExistingRooms}
+          disabled={saving || configurationMode !== 'common'}
+          className="rounded-xl bg-primary px-4 py-2 font-semibold text-white disabled:opacity-50"
+        >
+          Apply selected fields to selected existing rooms
+        </button>
+      </section>
+
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-slate-900">Rooms ({rooms.length})</h2>
         {!rooms.length && <p className="rounded-2xl bg-white p-5 text-slate-600">No rooms have been added yet.</p>}
@@ -410,7 +628,23 @@ const RoomManagement = () => {
           <article key={room._id} className="rounded-3xl bg-white p-5 shadow-card ring-1 ring-slate-200">
             {draft?._id === room._id ? (
               <form onSubmit={handleSave} className="space-y-4">
+                <div className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-end">
+                  <label className="flex-1 text-sm text-slate-700">Copy information from another room
+                    <select value={copySourceId} onChange={(event) => setCopySourceId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                      <option value="">Select source room</option>
+                      {activeRooms.filter((item) => item._id !== draft._id).map((item) => (
+                        <option key={item._id} value={item._id}>{item.roomNumber} · {item.type}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="button" onClick={copyRoomDetails} disabled={!copySourceId} className="rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">
+                    Copy room details
+                  </button>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-sm text-slate-700">Room title
+                    <input value={draft.title || ''} maxLength={120} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+                  </label>
                   <label className="text-sm text-slate-700">Room label
                     <input value={draft.roomNumber} maxLength={40} onChange={(event) => setDraft({ ...draft, roomNumber: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" required />
                   </label>
@@ -521,18 +755,23 @@ const RoomManagement = () => {
                     {room.facilities?.length > 0 && <p className="mt-2 text-sm text-slate-600">Facilities: {room.facilities.join(', ')}</p>}
                     {canSeeCommission && room.commissionEstimate && <p className="mt-2 text-xs text-slate-500">3% commission estimate: ₦{room.commissionEstimate.studentNestCommission.toLocaleString()}</p>}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft(getRoomDraft(room));
-                        setEditImages([]);
-                        setEditVideos([]);
-                        setKeptImageIndexes((room.images || []).map((_, index) => index));
-                        setKeptVideoIndexes((room.videos || []).map((_, index) => index));
-                      }}
-                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                    >Edit</button>
+                  <div className="flex flex-wrap gap-2">
+                    {room.isActive && (
+                      <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedRoomIds?.includes(room._id) || false}
+                          onChange={(event) => setSelectedRoomIds((current) => {
+                            const selected = current || [];
+                            return event.target.checked
+                              ? [...new Set([...selected, room._id])]
+                              : selected.filter((roomId) => roomId !== room._id);
+                          })}
+                        />
+                        Bulk select
+                      </label>
+                    )}
+                    <button type="button" onClick={() => startEditingRoom(room)} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">Edit</button>
                     {room.isActive && <button type="button" disabled={saving} onClick={() => handleDeactivate(room)} className="rounded-xl border border-rose-200 px-3 py-2 text-sm text-rose-700 disabled:opacity-50">Deactivate</button>}
                   </div>
                 </div>

@@ -362,3 +362,52 @@ test('room status changes use a conditional atomic update and append history', a
     Room.findOneAndUpdate = originals.roomFindOneAndUpdate;
   }
 });
+
+test('room information updates leave status and existing media untouched', async () => {
+  const originals = {
+    propertyFindById: Property.findById,
+    roomFindOne: Room.findOne,
+    roomFindOneAndUpdate: Room.findOneAndUpdate
+  };
+  const property = approvedProperty();
+  const room = roomRecord({
+    images: [{ url: 'https://cdn.example.test/room.jpg', publicId: 'room-image' }],
+    videos: [{ url: 'https://cdn.example.test/room.mp4', publicId: 'room-video' }],
+    statusHistory: [{ to: 'available' }]
+  });
+  let update;
+  Property.findById = async () => property;
+  Room.findOne = async () => room;
+  Room.findOneAndUpdate = async (_filter, changes) => {
+    update = changes;
+    return roomRecord({
+      ...room,
+      description: changes.$set.description,
+      price: changes.$set.price
+    });
+  };
+
+  try {
+    const response = makeResponse();
+    await updatePropertyRoom({
+      params: { propertyId, roomId },
+      body: { description: 'Shared clean description', price: 99000 },
+      user: { _id: property.agentId, role: 'agent' }
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(update.$set.description, 'Shared clean description');
+    assert.equal(update.$set.price, 99000);
+    assert.equal(update.$set.status, undefined);
+    assert.equal(update.$set.images, undefined);
+    assert.equal(update.$set.videos, undefined);
+    assert.deepEqual(response.body.data.images, room.images);
+    assert.deepEqual(response.body.data.videos, room.videos);
+    assert.equal(response.body.data.status, 'available');
+    assert.deepEqual(response.body.data.statusHistory, room.statusHistory);
+  } finally {
+    Property.findById = originals.propertyFindById;
+    Room.findOne = originals.roomFindOne;
+    Room.findOneAndUpdate = originals.roomFindOneAndUpdate;
+  }
+});
