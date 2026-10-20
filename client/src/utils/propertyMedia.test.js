@@ -6,7 +6,8 @@ import {
   getMediaUrl,
   getValidPropertyMedia,
   getWrappedMediaIndex,
-  validatePropertyMediaFiles
+  validatePropertyMediaFiles,
+  validateRoomMediaFiles
 } from './propertyMedia.js';
 
 test('normalizes array and legacy image/video records while ignoring invalid URLs', () => {
@@ -67,4 +68,17 @@ test('validates upload types, per-file size and server-aligned per-request count
   assert.match(validatePropertyMediaFiles([], [{ ...video, name: 'tour.exe' }]), /supported video/);
   assert.match(validatePropertyMediaFiles(Array.from({ length: 16 }, () => image), []), /no more than 15 images/);
   assert.match(validatePropertyMediaFiles([], Array.from({ length: 6 }, () => video)), /no more than 5 videos/);
+  assert.match(validatePropertyMediaFiles(
+    Array.from({ length: 3 }, (_, index) => ({ ...image, name: `room-${index}.jpg`, size: 80 * 1024 * 1024 })),
+    []
+  ), /200 MB total upload limit/);
+});
+
+test('enforces the smaller room-media request limits', () => {
+  const image = { name: 'room.jpg', type: 'image/jpeg', size: 1024 };
+  const video = { name: 'room.mp4', type: 'video/mp4', size: 1024 };
+  assert.equal(validateRoomMediaFiles([image], [video]), null);
+  assert.match(validateRoomMediaFiles(Array.from({ length: 6 }, () => image), []), /no more than 5 room images/);
+  assert.match(validateRoomMediaFiles([], Array.from({ length: 3 }, () => video)), /no more than 2 room videos/);
+  assert.match(validateRoomMediaFiles([{ ...image, size: 11 * 1024 * 1024 }], []), /10 MB room-media limit/);
 });

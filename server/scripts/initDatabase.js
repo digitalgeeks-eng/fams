@@ -7,6 +7,8 @@ import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
 import Complaint from '../models/Complaint.js';
 import Recommendation from '../models/Recommendation.js';
+import Room from '../models/Room.js';
+import RoomInspectionRequest from '../models/RoomInspectionRequest.js';
 
 dotenv.config();
 
@@ -15,6 +17,8 @@ const initializeDatabase = async () => {
     await connectDatabase();
 
     await Promise.all([
+      Room.createIndexes(),
+      RoomInspectionRequest.createIndexes(),
       User.syncIndexes(),
       Property.syncIndexes(),
       Booking.syncIndexes(),

@@ -9,6 +9,10 @@ const PropertyCard = ({ property }) => {
   const videos = getValidPropertyMedia(property, 'videos');
   const imageUrl = images.length ? getImageUrl(getMediaUrl(images[0].media)) : getImageUrl(undefined);
   const isUnavailable = property.isUnavailable || property.availabilityStatus === 'not_available';
+  const isMultiRoom = property.managementMode === 'multi_room';
+  const availableRoomCount = property.roomSummary?.availableRoomCount || 0;
+  const displayedPrice = isMultiRoom ? property.roomSummary?.minimumAvailablePrice : property.price;
+  const isListingUnavailable = isMultiRoom ? availableRoomCount === 0 || isUnavailable : isUnavailable;
 
   return (
     <div className="group overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200/60 bg-white shadow-card transition duration-300 hover:-translate-y-2 hover:shadow-2xl">
@@ -21,10 +25,14 @@ const PropertyCard = ({ property }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100"></div>
         <div className="absolute left-3 top-3 sm:left-5 sm:top-5 inline-flex items-center rounded-full bg-white/95 px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-slate-900 shadow-md backdrop-blur-sm transition duration-300 group-hover:bg-white">
-          ₦{property.price?.toLocaleString()}
+          {isMultiRoom && displayedPrice == null
+            ? 'No rooms available'
+            : `${isMultiRoom ? 'From ' : ''}₦${displayedPrice?.toLocaleString() || property.price?.toLocaleString()}`}
         </div>
-        <div className={`absolute right-3 top-3 sm:right-5 sm:top-5 inline-flex items-center rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold shadow-md backdrop-blur-sm transition duration-300 ${isUnavailable ? 'bg-rose-600 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-900'}`}>
-          {isUnavailable ? 'Not Available' : property.approvalStatus || 'Pending'}
+        <div className={`absolute right-3 top-3 sm:right-5 sm:top-5 inline-flex items-center rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold shadow-md backdrop-blur-sm transition duration-300 ${isListingUnavailable ? 'bg-rose-600 text-white' : 'bg-slate-900/80 text-white hover:bg-slate-900'}`}>
+          {isMultiRoom
+            ? `${availableRoomCount} ${availableRoomCount === 1 ? 'room' : 'rooms'} available`
+            : isUnavailable ? 'Not Available' : property.approvalStatus || 'Pending'}
         </div>
       </div>
       <div className="space-y-3 sm:space-y-4 p-4 sm:p-6">
@@ -36,7 +44,7 @@ const PropertyCard = ({ property }) => {
             </p>
           </div>
           <div className="rounded-full bg-gradient-to-r from-primary/10 to-accent/10 px-2 py-1 sm:px-3.5 sm:py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-primary whitespace-nowrap flex-shrink-0">
-            {property.type || 'Room'}
+            {isMultiRoom ? 'Multi-room' : property.type || 'Room'}
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -47,9 +55,12 @@ const PropertyCard = ({ property }) => {
           </span>
           <span className="inline-flex items-center justify-center gap-1.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 px-2.5 py-2 sm:px-3 sm:py-2.5 text-xs sm:text-sm font-semibold text-slate-700 border border-blue-100/50">
             <span className="text-sm sm:text-lg">🛏️</span>
-            <span>{property.type || 'Room'}</span>
+            <span>{isMultiRoom ? 'Multi-room' : property.type || 'Room'}</span>
           </span>
         </div>
+        {isMultiRoom && property.roomSummary?.maximumAvailablePrice != null && displayedPrice !== property.roomSummary.maximumAvailablePrice && (
+          <p className="text-xs text-slate-500">Up to ₦{property.roomSummary.maximumAvailablePrice.toLocaleString()} · {availableRoomCount} available</p>
+        )}
         <p className="line-clamp-2 text-xs sm:text-sm leading-relaxed text-slate-600">{property.description || 'A comfortable property with premium amenities and convenient campus access.'}</p>
         {(images.length > 0 || videos.length > 0) && (
           <p className="text-xs font-medium text-slate-500">

@@ -9,6 +9,9 @@ export const createBooking = async (req, res) => {
   }
 
   const property = await Property.findById(propertyId);
+  if (property?.managementMode === 'multi_room') {
+    return res.status(409).json({ message: 'This building is managed room by room. Request an inspection for a specific available room instead.' });
+  }
   if (!property || property.approvalStatus !== 'approved' || property.isUnavailable || property.availabilityStatus === 'not_available' || (property.visibleUntil && property.visibleUntil <= new Date())) {
     return res.status(404).json({ message: 'Property not available for booking' });
   }

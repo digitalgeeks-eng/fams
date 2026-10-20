@@ -85,6 +85,11 @@ const MyListings = () => {
                   <Link to={`/agent/listings/${property._id}/edit`} className="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-slate-900">
                     Edit Listing
                   </Link>
+                  {property.managementMode === 'multi_room' && (
+                    <Link to={`/agent/listings/${property._id}/rooms`} className="inline-flex items-center justify-center rounded-2xl border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5">
+                      Manage Rooms
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDelete(property._id)}

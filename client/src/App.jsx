@@ -22,6 +22,7 @@ import Complaints from './pages/Complaints.jsx';
 import Recommendations from './pages/Recommendations.jsx';
 import MyListings from './pages/MyListings.jsx';
 import AddProperty from './pages/AddProperty.jsx';
+import RoomManagement from './pages/RoomManagement.jsx';
 import BookingRequests from './pages/BookingRequests.jsx';
 import AgentVerification from './pages/AgentVerification.jsx';
 import PropertyApproval from './pages/PropertyApproval.jsx';
@@ -151,12 +152,14 @@ const App = () => (
           <Route path="/agent/listings" element={<PrivateRoute role="agent"><MyListings /></PrivateRoute>} />
           <Route path="/agent/add-property" element={<PrivateRoute role="agent"><AddProperty /></PrivateRoute>} />
           <Route path="/agent/listings/:id/edit" element={<PrivateRoute role="agent"><AddProperty /></PrivateRoute>} />
+          <Route path="/agent/listings/:id/rooms" element={<PrivateRoute role="agent"><RoomManagement /></PrivateRoute>} />
           <Route path="/agent/booking-requests" element={<PrivateRoute role="agent"><BookingRequests /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute role="admin"><AdminDashboard /></PrivateRoute>} />
           <Route path="/admin/manage" element={<SuperAdminRoute><AdminManagement /></SuperAdminRoute>} />
           <Route path="/admin/agents" element={<SuperAdminRoute><AgentVerification /></SuperAdminRoute>} />
           <Route path="/admin/properties/new" element={<SuperAdminRoute><AddProperty /></SuperAdminRoute>} />
           <Route path="/admin/properties/:id/edit" element={<SuperAdminRoute><AddProperty /></SuperAdminRoute>} />
+          <Route path="/admin/properties/:id/rooms" element={<LocationAdminPropertyRoute><RoomManagement /></LocationAdminPropertyRoute>} />
           <Route path="/admin/properties" element={<LocationAdminPropertyRoute><PropertyApproval /></LocationAdminPropertyRoute>} />
           <Route path="/admin/payments" element={<LocationAdminPropertyRoute><PaymentVerification /></LocationAdminPropertyRoute>} />
           <Route path="/admin/bookings" element={<LocationAdminPropertyRoute><AdminBookings /></LocationAdminPropertyRoute>} />

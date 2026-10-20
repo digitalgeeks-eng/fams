@@ -3,6 +3,42 @@ import path from 'path';
 
 const imageStorage = multer.memoryStorage();
 
+const createLimitedMemoryStorage = (maxRequestBytes) => ({
+  _handleFile(req, file, callback) {
+    const chunks = [];
+    let size = 0;
+    let finished = false;
+    file.stream.on('data', (chunk) => {
+      if (finished) return;
+      const requestSize = (req.propertyMediaBytes || 0) + chunk.length;
+      if (requestSize > maxRequestBytes) {
+        finished = true;
+        chunks.length = 0;
+        callback(new multer.MulterError('LIMIT_FILE_SIZE'));
+        file.stream.resume();
+        return;
+      }
+      req.propertyMediaBytes = requestSize;
+      size += chunk.length;
+      chunks.push(chunk);
+    });
+    file.stream.on('end', () => {
+      if (finished) return;
+      finished = true;
+      callback(null, { buffer: Buffer.concat(chunks), size });
+    });
+    file.stream.on('error', (error) => {
+      if (finished) return;
+      finished = true;
+      callback(error);
+    });
+  },
+  _removeFile(req, file, callback) {
+    delete file.buffer;
+    callback(null);
+  }
+});
+
 const imageFilter = (req, file, cb) => {
   const allowedExtensions = /jpeg|jpg|png|gif|webp|bmp|tiff|tif|svg|ico/;
   const allowedMimeTypes = /^image\//;
@@ -74,9 +110,15 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+export const uploadRoomPropertyMedia = multer({
+  storage: createLimitedMemoryStorage(70 * 1024 * 1024),
+  limits: { fileSize: 10 * 1024 * 1024, files: 7 },
+  fileFilter
+});
+
 export const uploadPropertyMedia = multer({
-  storage: imageStorage,
-  limits: { fileSize: 100 * 1024 * 1024 },
+  storage: createLimitedMemoryStorage(200 * 1024 * 1024),
+  limits: { fileSize: 100 * 1024 * 1024, files: 20 },
   fileFilter: fileFilter
 });
 
