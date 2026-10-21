@@ -1,7 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth.jsx';
-import api from './services/api.js';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
@@ -35,7 +33,6 @@ import SendNotification from './pages/SendNotification.jsx';
 import AdminManagement from './pages/AdminManagement.jsx';
 import Navbar from './components/Navbar.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
-import LaunchCountdown from './components/LaunchCountdown.jsx';
 
 const PrivateRoute = ({ children, role }) => {
   const { user, loading } = useAuth();
@@ -65,72 +62,12 @@ const NonLocationAdminComplaintsRoute = ({ children }) => {
   return children;
 };
 
-const LaunchGate = ({ children }) => {
-  const { user, loading } = useAuth();
-  const location = useLocation();
-  const [launchStatus, setLaunchStatus] = useState(null);
-  const [error, setError] = useState('');
-  const [retry, setRetry] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    let timeout;
-
-    const refreshStatus = async () => {
-      try {
-        const response = await api.get('/launch-status');
-        const data = response.data.data;
-        const nextStatus = { ...data, anchorPerformance: performance.now() };
-        if (!active) return;
-        setLaunchStatus(nextStatus);
-        setError('');
-
-        if (data.launched) return;
-        const remaining = Date.parse(data.launchAt) - Date.parse(data.serverTime);
-        const delay = remaining <= 0 ? 500 : remaining <= 60_000 ? 1000 : 30_000;
-        timeout = window.setTimeout(refreshStatus, delay);
-      } catch {
-        if (!active) return;
-        setError('Launch status could not be refreshed.');
-        timeout = window.setTimeout(refreshStatus, launchStatus ? 5000 : 3000);
-      }
-    };
-
-    refreshStatus();
-    return () => {
-      active = false;
-      window.clearTimeout(timeout);
-    };
-  }, [retry]);
-
-  const isSuperAdmin = user?.role === 'admin' && (!user.adminRole || user.adminRole === 'super_admin');
-  const launchOpen = launchStatus && (!launchStatus.launchModeEnabled || launchStatus.launched);
-  const adminLoginPath = !user
-    && location.pathname === '/login'
-    && new URLSearchParams(location.search).get('admin') === '1';
-
-  if (!launchOpen && !(isSuperAdmin && !loading) && !adminLoginPath) {
-    return (
-      <LaunchCountdown
-        status={launchStatus}
-        error={error}
-        onRetry={() => setRetry((value) => value + 1)}
-      />
-    );
-  }
-
-  if (!launchStatus && !adminLoginPath) return <LoadingSpinner />;
-
-  return children;
-};
-
 const App = () => (
   <BrowserRouter>
-    <LaunchGate>
-      <div className="min-h-screen bg-background text-slate-900">
-        <Navbar />
-        <main className="max-w-7xl mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-8">
-          <Routes>
+    <div className="min-h-screen bg-background text-slate-900">
+      <Navbar />
+      <main className="max-w-7xl mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-8">
+        <Routes>
           <Route path="/" element={<Listings />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -168,10 +105,9 @@ const App = () => (
           <Route path="/admin/notifications" element={<SuperAdminRoute><SendNotification /></SuperAdminRoute>} />
           <Route path="/admin/contact-inquiries" element={<SuperAdminRoute><ContactInquiries /></SuperAdminRoute>} />
           <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
-          </Routes>
-        </main>
-      </div>
-    </LaunchGate>
+        </Routes>
+      </main>
+    </div>
   </BrowserRouter>
 );
 
