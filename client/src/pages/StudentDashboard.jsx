@@ -87,8 +87,14 @@ const StudentDashboard = () => {
             {data.bookings.length ? data.bookings.map((booking) => (
               <li key={booking._id} className="rounded-lg sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
                 <p className="text-sm sm:text-base font-semibold text-slate-900 truncate">{booking.propertyId?.title || 'Booked property'}</p>
+                {booking.roomId?.roomNumber && <p className="mt-0.5 text-xs sm:text-sm text-slate-600">Room: {booking.roomId.roomNumber}</p>}
                 <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-600">Status: {booking.bookingStatus}</p>
                 <p className="mt-1 sm:mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">Payment: {booking.paymentStatus}</p>
+                {booking.inspectionRequests?.map((request) => (
+                  <p key={request._id} className="mt-1 text-xs sm:text-sm text-slate-600">
+                    Inspection: <span className="font-medium capitalize">{request.status}</span>
+                  </p>
+                ))}
               </li>
             )) : <p className="text-xs sm:text-sm text-slate-600">No bookings yet.</p>}
           </ul>

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const bookingSchema = new mongoose.Schema({
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   propertyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Property', required: true },
+  roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
   bookingStatus: { type: String, enum: ['pending', 'confirmed', 'cancelled', 'completed'], default: 'pending' },
   paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
   transactionReference: { type: String },

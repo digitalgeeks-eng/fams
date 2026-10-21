@@ -49,6 +49,7 @@ const BookingRequests = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="font-semibold">{booking.propertyId?.title}</p>
+                {booking.roomId?.roomNumber && <p className="text-slate-600">Room: {booking.roomId.roomNumber}</p>}
                 <p className="text-slate-600">Student: {booking.studentId?.name}</p>
                 <p className="text-slate-600">Type: {booking.propertyId?.type}</p>
                 <p className="text-slate-600">Check-in: {booking.checkInDate ? new Date(booking.checkInDate).toLocaleString() : 'N/A'}</p>

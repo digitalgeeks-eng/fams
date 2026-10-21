@@ -801,6 +801,12 @@ const RoomManagement = () => {
               <div>
                 <p className="font-medium text-slate-900">{request.roomId?.roomNumber || 'Room'} · {request.studentId?.name || 'Student'}</p>
                 <p className="text-sm text-slate-600">{request.studentId?.email || ''} · {request.status}</p>
+                {request.bookingId && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Booking {String(request.bookingId._id || request.bookingId).slice(-8)}
+                    {request.bookingId.bookingStatus ? ` · ${request.bookingId.bookingStatus}` : ''}
+                  </p>
+                )}
                 {request.message && <p className="mt-1 text-sm text-slate-600">{request.message}</p>}
               </div>
               {request.status === 'pending' && (

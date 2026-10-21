@@ -76,6 +76,7 @@ const AgentDashboard = () => {
             {data.bookings.length ? data.bookings.map((booking) => (
               <li key={booking._id} className="rounded-3xl border border-slate-200 p-4">
                 <p className="font-semibold">{booking.propertyId?.title || 'Booking request'}</p>
+                {booking.roomId?.roomNumber && <p className="text-sm text-slate-600">Room: {booking.roomId.roomNumber}</p>}
                 <p className="text-slate-600">Status: {booking.bookingStatus}</p>
                 <p className={`text-sm font-semibold capitalize ${
                   booking.paymentStatus === 'paid' ? 'text-emerald-600' :

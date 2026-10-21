@@ -17,6 +17,7 @@ import {
 } from '../controllers/propertyController.js';
 import {
   createPropertyRooms,
+  createPropertyInspectionRequest,
   createRoomInspectionRequest,
   deactivatePropertyRoom,
   getPropertyRooms,
@@ -75,6 +76,12 @@ router.delete(
   protect,
   authorizeRoles('agent', 'admin'),
   asyncHandler(deactivatePropertyRoom)
+);
+router.post(
+  '/:propertyId/inspection-requests',
+  protect,
+  authorizeRoles('student'),
+  asyncHandler(createPropertyInspectionRequest)
 );
 router.post(
   '/:propertyId/rooms/:roomId/inspection-requests',

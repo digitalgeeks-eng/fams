@@ -12,6 +12,7 @@ const MyBookings = () => {
   const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [inspectionBusy, setInspectionBusy] = useState('');
 
   const fetchBookings = async () => {
     try {
@@ -113,6 +114,28 @@ const MyBookings = () => {
     }
   };
 
+  const handleInspectionRequest = async (booking) => {
+    const propertyId = booking.propertyId?._id || booking.propertyId;
+    const roomId = booking.roomId?._id || booking.roomId;
+    if (!propertyId) {
+      setMessage('The booked property is no longer available for an inspection request.');
+      return;
+    }
+    setInspectionBusy(booking._id);
+    try {
+      const endpoint = roomId
+        ? `/properties/${propertyId}/rooms/${roomId}/inspection-requests`
+        : `/properties/${propertyId}/inspection-requests`;
+      await api.post(endpoint, { bookingId: booking._id });
+      setMessage('Inspection request submitted successfully.');
+      await fetchBookings();
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Unable to request an inspection.');
+    } finally {
+      setInspectionBusy('');
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -129,6 +152,9 @@ const MyBookings = () => {
             <div className="mb-4 pb-4 border-b border-slate-200">
               <h3 className="font-semibold text-lg text-slate-900">{booking.propertyId?.title || 'Booked property'}</h3>
               <p className="text-slate-600">Location: {booking.propertyId?.location}</p>
+              {booking.roomId && (
+                <p className="mt-1 text-sm font-medium text-slate-700">Room: {booking.roomId.roomNumber || 'Booked room'} · {booking.roomId.type || ''}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -170,6 +196,27 @@ const MyBookings = () => {
                 Refund status: {booking.refundStatus}
               </div>
             )}
+            {booking.bookingStatus === 'pending' || booking.bookingStatus === 'confirmed' ? (
+              <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <h4 className="font-semibold text-slate-900">Inspection management</h4>
+                {booking.inspectionRequests?.length ? booking.inspectionRequests.map((request) => (
+                  <p key={request._id} className="mt-2 text-sm text-slate-700">
+                    {request.roomId?.roomNumber ? `${request.roomId.roomNumber} · ` : ''}Request status: <span className="font-semibold capitalize">{request.status}</span>
+                    {request.responseNote ? ` · ${request.responseNote}` : ''}
+                  </p>
+                )) : <p className="mt-1 text-sm text-slate-600">Booking created. Inspection does not require payment.</p>}
+                {!booking.inspectionRequests?.some((request) => ['pending', 'accepted'].includes(request.status)) && (
+                  <button
+                    type="button"
+                    onClick={() => handleInspectionRequest(booking)}
+                    disabled={inspectionBusy === booking._id}
+                    className="mt-3 w-full rounded-xl border border-primary px-4 py-3 text-sm font-semibold text-primary disabled:opacity-50"
+                  >
+                    {inspectionBusy === booking._id ? 'Sending request…' : 'Request Inspection'}
+                  </button>
+                )}
+              </div>
+            ) : null}
 
             {booking.transactionReference && (
               <p className="text-sm text-slate-600 mb-4">Reference: <span className="font-mono bg-slate-100 px-2 py-1 rounded">{booking.transactionReference}</span></p>

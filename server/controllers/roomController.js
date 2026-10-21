@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Property from '../models/Property.js';
 import Room from '../models/Room.js';
+import Booking from '../models/Booking.js';
 import RoomInspectionRequest from '../models/RoomInspectionRequest.js';
 import { deleteCloudinaryAsset, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 import { adminAccessMessage, assertAdminPropertyAccess } from '../utils/adminScope.js';
@@ -461,39 +462,89 @@ export const deactivatePropertyRoom = async (req, res) => {
   return res.json({ message: 'Room deactivated.', data: updatedRoom });
 };
 
-export const createRoomInspectionRequest = async (req, res) => {
-  const access = await getRoomAndProperty(req.params.propertyId, req.params.roomId, req, res);
-  if (!access) return;
-  const { property, room } = access;
+const createInspectionRequestForBooking = async (req, res, roomAccess = null) => {
+  const property = roomAccess?.property || await getPropertyForRoomAccess(req.params.propertyId, req, res);
+  if (!property) return;
+  const room = roomAccess?.room || null;
   if (req.user.role !== 'student') return res.status(403).json({ message: 'Only students can request a room inspection.' });
-  if (!isRoomInspectionEligible(property, room)) {
+  if (room && !isRoomInspectionEligible(property, room)) {
     return res.status(409).json({ message: 'This room is no longer available for inspection.' });
   }
+  if (!room && (
+    property.managementMode === 'multi_room'
+    || property.approvalStatus !== 'approved'
+    || property.isDeleted
+    || property.isUnavailable
+    || property.availabilityStatus === 'not_available'
+    || (property.visibleUntil && property.visibleUntil <= new Date())
+  )) {
+    return res.status(409).json({ message: 'This property is no longer available for inspection.' });
+  }
+  const { bookingId } = req.body;
+  if (!mongoose.isValidObjectId(bookingId)) {
+    return res.status(400).json({ message: 'A valid booking id is required before requesting an inspection.' });
+  }
+  const booking = await Booking.findById(bookingId);
+  if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+  if (booking.studentId.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: 'You can only request an inspection for your own booking.' });
+  }
+  if (booking.propertyId.toString() !== property._id.toString()) {
+    return res.status(409).json({ message: 'The booking does not belong to this property.' });
+  }
+  if (!['pending', 'confirmed'].includes(booking.bookingStatus)) {
+    return res.status(409).json({ message: 'Only an active booking can be used to request an inspection.' });
+  }
+  if (room
+    ? booking.roomId?.toString() !== room._id.toString()
+    : Boolean(booking.roomId)) {
+    return res.status(409).json({ message: 'The booking does not match the requested room or property.' });
+  }
+
   const message = String(req.body.message || '').trim();
   if (message.length > 1000) return res.status(400).json({ message: 'Inspection notes cannot exceed 1000 characters.' });
   const duplicate = await RoomInspectionRequest.exists({
-    studentId: req.user._id,
-    roomId: room._id,
-    status: 'pending'
+    bookingId: booking._id,
+    status: { $in: ['pending', 'accepted'] }
   });
-  if (duplicate) return res.status(409).json({ message: 'You already have a pending inspection request for this room.' });
+  if (duplicate) return res.status(409).json({ message: 'You already have an active inspection request for this booking.' });
+  const legacyDuplicate = await RoomInspectionRequest.exists({
+    studentId: req.user._id,
+    propertyId: property._id,
+    ...(room ? { roomId: room._id } : { roomId: null }),
+    bookingId: { $exists: false },
+    status: { $in: ['pending', 'accepted'] }
+  });
+  if (legacyDuplicate) {
+    return res.status(409).json({ message: 'You already have an active inspection request for this property or room.' });
+  }
   let request;
   try {
     request = await RoomInspectionRequest.create({
       studentId: req.user._id,
       propertyId: property._id,
-      roomId: room._id,
+      ...(room ? { roomId: room._id } : {}),
+      bookingId: booking._id,
+      activeBookingId: booking._id,
       message
     });
   } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ message: 'You already have a pending inspection request for this room.' });
+    if (error.code === 11000) return res.status(409).json({ message: 'You already have an active inspection request for this booking.' });
     throw error;
   }
   return res.status(201).json({
-    message: 'Inspection request submitted. The room availability has not changed.',
+    message: 'Inspection request submitted. Booking and availability status have not changed.',
     data: request
   });
 };
+
+export const createRoomInspectionRequest = async (req, res) => {
+  const access = await getRoomAndProperty(req.params.propertyId, req.params.roomId, req, res);
+  if (!access) return;
+  return createInspectionRequestForBooking(req, res, access);
+};
+
+export const createPropertyInspectionRequest = async (req, res) => createInspectionRequestForBooking(req, res);
 
 export const listRoomInspectionRequests = async (req, res) => {
   const property = await getPropertyForRoomAccess(req.params.propertyId, req, res);
@@ -505,6 +556,7 @@ export const listRoomInspectionRequests = async (req, res) => {
   const requests = await RoomInspectionRequest.find({ propertyId: property._id })
     .populate('studentId', 'name email')
     .populate('roomId', 'roomNumber title price billingPeriod status')
+    .populate('bookingId', 'bookingStatus paymentStatus roomId createdAt')
     .sort({ createdAt: -1 });
   return res.json({ data: requests });
 };
@@ -521,6 +573,7 @@ export const listStudentRoomInspectionRequests = async (req, res) => {
     studentId: req.user._id
   })
     .populate('roomId', 'roomNumber type price billingPeriod status')
+    .populate('bookingId', 'bookingStatus paymentStatus roomId createdAt')
     .sort({ createdAt: -1 });
   return res.json({ data: requests });
 };
@@ -550,7 +603,10 @@ export const updateRoomInspectionRequest = async (req, res) => {
       responseNote: String(req.body.responseNote || '').trim(),
       reviewedBy: req.user._id,
       reviewedAt: new Date()
-    }
+    },
+    ...(req.body.status === 'declined' || req.body.status === 'completed'
+      ? { $unset: { activeBookingId: 1 } }
+      : {})
   }, { new: true, runValidators: true });
   if (!updated) return res.status(409).json({ message: 'Inspection request changed while being reviewed.' });
   return res.json({ message: 'Inspection request updated. Room availability was not changed.', data: updated });

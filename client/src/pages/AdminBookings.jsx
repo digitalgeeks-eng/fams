@@ -111,6 +111,7 @@ const AdminBookings = () => {
                       <div>
                         <p className="text-sm uppercase tracking-wide text-slate-500">Property</p>
                         <p className="mt-2 text-slate-700 font-semibold">{property?.title || 'Unknown'}</p>
+                        {booking.roomId?.roomNumber && <p className="text-slate-600">Room: {booking.roomId.roomNumber}</p>}
                         <p className="text-slate-600">Location: {property?.location || 'Unknown'}</p>
                         <p className="text-slate-600">Type: {property?.type || 'Unknown'}</p>
                         <p className="text-slate-600">Price: ₦{property?.price?.toLocaleString() || '0'}</p>

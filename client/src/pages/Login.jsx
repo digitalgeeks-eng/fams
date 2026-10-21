@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { GoogleLogin } from '@react-oauth/google';
 
@@ -9,6 +9,15 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login, loginWithGoogle, error: contextError, setError: setContextError } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const bookingDestination = location.state?.from;
+  const navigateAfterLogin = (role) => {
+    if (role === 'student' && typeof bookingDestination === 'string' && bookingDestination.startsWith('/properties/')) {
+      navigate(bookingDestination, { replace: true });
+    } else {
+      navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/agent' : '/student', { replace: true });
+    }
+  };
 
   useEffect(() => {
     setContextError(null);
@@ -22,9 +31,7 @@ const Login = () => {
     try {
       const result = await login(form);
       setLoading(false);
-      if (result?.data?.user?.role === 'admin') navigate('/admin');
-      else if (result?.data?.user?.role === 'agent') navigate('/agent');
-      else navigate('/student');
+      navigateAfterLogin(result?.data?.user?.role);
     } catch (err) {
       setLoading(false);
       const errorMessage = err.response?.data?.message || contextError || 'Unable to log in';
@@ -38,7 +45,7 @@ const Login = () => {
     try {
       const result = await loginWithGoogle(response.credential);
       const role = result?.data?.user?.role;
-      navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/agent' : '/student');
+      navigateAfterLogin(role);
     } catch (err) {
       setLocalError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
     } finally {

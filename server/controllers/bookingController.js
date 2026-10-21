@@ -1,19 +1,34 @@
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
+import Room from '../models/Room.js';
+import RoomInspectionRequest from '../models/RoomInspectionRequest.js';
+import mongoose from 'mongoose';
+import { isRoomInspectionEligible } from '../utils/roomRules.js';
 import { adminAccessMessage, assertAdminPropertyAccess, getAdminPropertyFilter, isSuperAdmin } from '../utils/adminScope.js';
 
 export const createBooking = async (req, res) => {
-  const { propertyId, checkInDate, checkOutDate, guestCount = 1 } = req.body;
+  const { propertyId, roomId, checkInDate, checkOutDate, guestCount = 1 } = req.body;
   if (!propertyId || !checkInDate || !checkOutDate) {
     return res.status(400).json({ message: 'Property id, check-in date and check-out date are required' });
   }
+  if (!mongoose.isValidObjectId(propertyId) || (roomId && !mongoose.isValidObjectId(roomId))) {
+    return res.status(400).json({ message: 'A valid property and room id are required' });
+  }
 
   const property = await Property.findById(propertyId);
-  if (property?.managementMode === 'multi_room') {
-    return res.status(409).json({ message: 'This building is managed room by room. Request an inspection for a specific available room instead.' });
-  }
-  if (!property || property.approvalStatus !== 'approved' || property.isUnavailable || property.availabilityStatus === 'not_available' || (property.visibleUntil && property.visibleUntil <= new Date())) {
+  if (!property || property.isDeleted || property.approvalStatus !== 'approved' || property.isUnavailable || property.availabilityStatus === 'not_available' || (property.visibleUntil && property.visibleUntil <= new Date())) {
     return res.status(404).json({ message: 'Property not available for booking' });
+  }
+
+  let room = null;
+  if (property.managementMode === 'multi_room') {
+    if (!roomId) return res.status(400).json({ message: 'Select a specific room before booking this property' });
+    room = await Room.findOne({ _id: roomId, propertyId: property._id });
+    if (!isRoomInspectionEligible(property, room)) {
+      return res.status(409).json({ message: 'This room is not available for booking' });
+    }
+  } else if (roomId) {
+    return res.status(400).json({ message: 'A room can only be selected for a multi-room property' });
   }
 
   const checkIn = new Date(checkInDate);
@@ -31,6 +46,7 @@ export const createBooking = async (req, res) => {
   const existingBooking = await Booking.findOne({
     studentId: req.user._id,
     propertyId,
+    ...(roomId ? { roomId } : { roomId: null }),
     bookingStatus: { $in: ['pending', 'confirmed'] },
     checkInDate: { $lt: checkOut },
     checkOutDate: { $gt: checkIn }
@@ -40,7 +56,7 @@ export const createBooking = async (req, res) => {
   }
 
   const overlappingBooking = await Booking.findOne({
-    propertyId,
+    ...(roomId ? { roomId } : { propertyId, roomId: null }),
     bookingStatus: { $in: ['pending', 'confirmed'] },
     checkInDate: { $lt: checkOut },
     checkOutDate: { $gt: checkIn }
@@ -52,6 +68,7 @@ export const createBooking = async (req, res) => {
   const booking = await Booking.create({
     studentId: req.user._id,
     propertyId,
+    ...(roomId ? { roomId } : {}),
     transactionReference: `FULAFIA-${Date.now()}`,
     checkInDate: checkIn,
     checkOutDate: checkOut,
@@ -63,8 +80,27 @@ export const createBooking = async (req, res) => {
 export const getStudentBookings = async (req, res) => {
   const bookings = await Booking.find({ studentId: req.user._id })
     .populate('propertyId', 'title location price images approvalStatus isUnavailable availabilityStatus availabilityReason')
+    .populate('roomId', 'roomNumber type price billingPeriod status')
     .sort({ createdAt: -1 });
-  res.json({ data: bookings });
+  const inspectionRequests = bookings.length
+    ? await RoomInspectionRequest.find({ studentId: req.user._id })
+      .populate('roomId', 'roomNumber type')
+      .sort({ createdAt: -1 })
+    : [];
+  res.json({
+    data: bookings.map((booking) => ({
+      ...booking.toObject(),
+      inspectionRequests: inspectionRequests.filter((request) => {
+        if (request.bookingId) return request.bookingId.toString() === booking._id.toString();
+        const requestRoomId = request.roomId?._id || request.roomId;
+        const bookingRoomId = booking.roomId?._id || booking.roomId;
+        return request.propertyId.toString() === (booking.propertyId?._id || booking.propertyId).toString()
+          && (requestRoomId
+            ? requestRoomId.toString() === bookingRoomId?.toString()
+            : !bookingRoomId);
+      })
+    }))
+  });
 };
 
 export const getAgentBookings = async (req, res) => {
@@ -73,6 +109,7 @@ export const getAgentBookings = async (req, res) => {
   const bookings = await Booking.find({ propertyId: { $in: propertyIds } })
     .populate('studentId', 'name email')
     .populate('propertyId', 'title location price')
+    .populate('roomId', 'roomNumber type')
     .sort({ createdAt: -1 });
   res.json({ data: bookings });
 };
@@ -86,6 +123,7 @@ export const getAdminBookings = async (req, res) => {
       select: 'title location price type approvalStatus images agentId isUnavailable availabilityStatus availabilityReason',
       populate: { path: 'agentId', select: 'name email' }
     })
+    .populate('roomId', 'roomNumber type')
     .sort({ createdAt: -1 });
   res.json({ data: bookings });
 };
@@ -93,7 +131,8 @@ export const getAdminBookings = async (req, res) => {
 export const getBooking = async (req, res) => {
   const booking = await Booking.findById(req.params.id)
     .populate('studentId', 'name email')
-    .populate('propertyId', 'title location price');
+    .populate('propertyId', 'title location price')
+    .populate('roomId', 'roomNumber type');
   if (!booking) return res.status(404).json({ message: 'Booking not found' });
   if (booking.studentId._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Unauthorized access to booking' });

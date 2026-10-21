@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
 import Room from '../models/Room.js';
 import RoomInspectionRequest from '../models/RoomInspectionRequest.js';
@@ -225,6 +226,7 @@ test('inspection requests do not reserve or change the room', async () => {
   const originals = {
     propertyFindById: Property.findById,
     roomFindOne: Room.findOne,
+    bookingFindById: Booking.findById,
     requestExists: RoomInspectionRequest.exists,
     requestCreate: RoomInspectionRequest.create,
     roomUpdate: Room.findOneAndUpdate
@@ -235,6 +237,14 @@ test('inspection requests do not reserve or change the room', async () => {
   let roomUpdateCalled = false;
   Property.findById = async () => property;
   Room.findOne = async () => room;
+  Booking.findById = async () => ({
+    _id: '65d123456789012345678906',
+    studentId: '65d123456789012345678905',
+    propertyId,
+    roomId,
+    bookingStatus: 'pending',
+    paymentStatus: 'pending'
+  });
   RoomInspectionRequest.exists = async () => false;
   RoomInspectionRequest.create = async (data) => {
     createdRequest = data;
@@ -246,7 +256,7 @@ test('inspection requests do not reserve or change the room', async () => {
     const response = makeResponse();
     await createRoomInspectionRequest({
       params: { propertyId, roomId },
-      body: { message: 'Please arrange a viewing.' },
+      body: { bookingId: '65d123456789012345678906', message: 'Please arrange a viewing.' },
       user: { _id: '65d123456789012345678905', role: 'student' }
     }, response);
     assert.equal(response.statusCode, 201);
@@ -256,6 +266,7 @@ test('inspection requests do not reserve or change the room', async () => {
   } finally {
     Property.findById = originals.propertyFindById;
     Room.findOne = originals.roomFindOne;
+    Booking.findById = originals.bookingFindById;
     RoomInspectionRequest.exists = originals.requestExists;
     RoomInspectionRequest.create = originals.requestCreate;
     Room.findOneAndUpdate = originals.roomUpdate;
