@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import Booking from '../models/Booking.js';
 import Property from '../models/Property.js';
 import Room from '../models/Room.js';
-import { createBooking } from '../controllers/bookingController.js';
+import RoomInspectionRequest from '../models/RoomInspectionRequest.js';
+import { createBooking, getStudentBookings } from '../controllers/bookingController.js';
 
 const propertyId = '65d123456789012345678901';
 const roomId = '65d123456789012345678902';
@@ -48,7 +49,7 @@ const futureDates = () => {
   };
 };
 
-const withBookingMocks = async ({ property, room, run }) => {
+const withBookingMocks = async ({ property, room, existingBooking = null, run }) => {
   const originals = {
     propertyFindById: Property.findById,
     roomFindOne: Room.findOne,
@@ -61,7 +62,7 @@ const withBookingMocks = async ({ property, room, run }) => {
   Room.findOne = async (filter) => filter._id === room?._id && filter.propertyId === property._id ? room : null;
   Booking.findOne = async (filter) => {
     filters.push(filter);
-    return null;
+    return existingBooking;
   };
   Booking.create = async (data) => {
     createdBooking = data;
@@ -113,6 +114,121 @@ test('creates a booking for the selected available room in a multi-room property
   });
 });
 
+test('returns every booking status for only the authenticated student, including after creation and refresh', async () => {
+  const originals = {
+    propertyFindById: Property.findById,
+    roomFindOne: Room.findOne,
+    bookingFindOne: Booking.findOne,
+    bookingCreate: Booking.create,
+    bookingFind: Booking.find,
+    inspectionFind: RoomInspectionRequest.find
+  };
+  const persistedBookings = [];
+  const inspectionRecords = [];
+  const makeBookingRecord = (data) => {
+    const booking = { ...data };
+    Object.defineProperty(booking, 'toObject', {
+      value() {
+        const { toObject, ...record } = this;
+        return record;
+      }
+    });
+    return booking;
+  };
+  const makeQuery = (records) => ({
+    populate() { return this; },
+    sort() { return Promise.resolve(records); }
+  });
+  persistedBookings.push(
+    makeBookingRecord({
+      _id: 'confirmed-room-booking',
+      studentId,
+      propertyId,
+      roomId,
+      bookingStatus: 'confirmed',
+      paymentStatus: 'paid',
+      createdAt: new Date('2025-01-01')
+    }),
+    makeBookingRecord({
+      _id: 'cancelled-legacy-booking',
+      studentId,
+      propertyId,
+      bookingStatus: 'cancelled',
+      paymentStatus: 'failed',
+      createdAt: new Date('2024-01-01')
+    }),
+    makeBookingRecord({
+      _id: 'completed-legacy-booking',
+      studentId,
+      propertyId,
+      bookingStatus: 'completed',
+      paymentStatus: 'paid',
+      createdAt: new Date('2023-01-01')
+    })
+  );
+  Property.findById = async () => approvedProperty();
+  Room.findOne = async () => null;
+  Booking.findOne = async () => null;
+  Booking.create = async (data) => {
+    const booking = makeBookingRecord({
+      _id: `booking-${persistedBookings.length + 1}`,
+      bookingStatus: 'pending',
+      paymentStatus: 'pending',
+      ...data,
+      createdAt: new Date(),
+    });
+    persistedBookings.push(booking);
+    return booking;
+  };
+  Booking.find = (filter) => {
+    assert.deepEqual(filter, { studentId });
+    return makeQuery(persistedBookings);
+  };
+  RoomInspectionRequest.find = (filter) => {
+    assert.deepEqual(filter, { studentId });
+    return makeQuery(inspectionRecords);
+  };
+  try {
+    const createResponse = makeResponse();
+    await createBooking({
+      body: { propertyId, ...futureDates() },
+      user: { _id: studentId, role: 'student' }
+    }, createResponse);
+    assert.equal(createResponse.statusCode, 201);
+    inspectionRecords.push({
+      _id: 'inspection-1',
+      bookingId: createResponse.body.data._id,
+      propertyId,
+      roomId,
+      status: 'pending'
+    });
+
+    for (let refresh = 0; refresh < 2; refresh += 1) {
+      const historyResponse = makeResponse();
+      await getStudentBookings({ user: { _id: studentId, role: 'student' } }, historyResponse);
+      assert.equal(historyResponse.body.data.length, 4);
+      assert.deepEqual(
+        historyResponse.body.data.map((booking) => booking.bookingStatus),
+        ['confirmed', 'cancelled', 'completed', 'pending']
+      );
+      const createdBooking = historyResponse.body.data.find((booking) => booking._id === createResponse.body.data._id);
+      assert.equal(createdBooking.bookingStatus, 'pending');
+      assert.equal(createdBooking.paymentStatus, 'pending');
+      assert.equal(createdBooking.roomId, undefined);
+      assert.equal(createdBooking.inspectionRequests[0]._id, 'inspection-1');
+      assert.ok(createdBooking.createdAt);
+      assert.equal(historyResponse.body.data[0].roomId, roomId);
+    }
+  } finally {
+    Property.findById = originals.propertyFindById;
+    Room.findOne = originals.roomFindOne;
+    Booking.findOne = originals.bookingFindOne;
+    Booking.create = originals.bookingCreate;
+    Booking.find = originals.bookingFind;
+    RoomInspectionRequest.find = originals.inspectionFind;
+  }
+});
+
 test('rejects room bookings for occupied, reserved, inactive, or unavailable rooms', async () => {
   for (const room of [
     availableRoom({ status: 'occupied' }),
@@ -147,6 +263,24 @@ test('requires an exact room selection for multi-room properties', async () => {
       }, response);
       assert.equal(response.statusCode, 400);
       assert.match(response.body.message, /select a specific room/i);
+    }
+  });
+});
+
+test('rejects a duplicate active booking for overlapping dates', async () => {
+  await withBookingMocks({
+    property: approvedProperty(),
+    existingBooking: { _id: 'existing-booking' },
+    run: async (context) => {
+      const response = makeResponse();
+      await createBooking({
+        body: { propertyId, ...futureDates() },
+        user: { _id: studentId, role: 'student' }
+      }, response);
+      assert.equal(response.statusCode, 409);
+      assert.match(response.body.message, /already have an active booking/i);
+      assert.equal(context.createdBooking, undefined);
+      assert.equal(context.filters.length, 1);
     }
   });
 });

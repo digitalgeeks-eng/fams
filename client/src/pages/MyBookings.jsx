@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { getBookingHistory, getBookingHistoryError } from '../utils/bookingHistory.js';
 
 const MyBookings = () => {
   const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bookingError, setBookingError] = useState('');
   const [activeBooking, setActiveBooking] = useState(null);
   const [proofFile, setProofFile] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -17,9 +19,10 @@ const MyBookings = () => {
   const fetchBookings = async () => {
     try {
       const response = await api.get('/bookings/student');
-      setBookings(response.data.data);
+      setBookings(getBookingHistory(response));
+      setBookingError('');
     } catch (err) {
-      console.error(err);
+      setBookingError(getBookingHistoryError(err));
     } finally {
       setLoading(false);
     }
@@ -146,6 +149,21 @@ const MyBookings = () => {
           {message}
         </div>
       )}
+      {bookingError && (
+        <div role="alert" className="flex flex-col gap-3 rounded-3xl border border-rose-200 bg-rose-50 p-4 text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+          <p>{bookingError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchBookings();
+            }}
+            className="rounded-xl border border-rose-300 px-4 py-2 font-semibold hover:bg-rose-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="grid gap-4">
         {bookings.length ? bookings.map((booking) => (
           <div key={booking._id} className="rounded-3xl bg-white p-6 shadow-xl">
@@ -158,6 +176,10 @@ const MyBookings = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-sm text-slate-600">Booked on</p>
+                <p className="text-slate-900">{booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}</p>
+              </div>
               <div>
                 <p className="text-sm text-slate-600">Booking Status</p>
                 <p className={`font-semibold capitalize ${
@@ -314,7 +336,7 @@ const MyBookings = () => {
               </form>
             )}
           </div>
-        )) : <div className="rounded-3xl bg-slate-50 p-6 text-slate-600 text-center">No booking history available.</div>}
+        )) : !bookingError ? <div className="rounded-3xl bg-slate-50 p-6 text-slate-600 text-center">No booking history available.</div> : null}
       </div>
     </section>
   );

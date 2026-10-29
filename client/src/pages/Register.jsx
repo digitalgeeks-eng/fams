@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api.js';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { getAuthenticatedHomePath } from '../utils/authSession.js';
 
 const Register = () => {
   const [step, setStep] = useState(1); // Basic registration, agent details, then email verification
@@ -216,7 +217,7 @@ const Register = () => {
       setError('');
       const result = await loginWithGoogle(response.credential);
       const role = result?.data?.user?.role;
-      navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/agent' : '/student');
+      navigate(getAuthenticatedHomePath(role));
     } catch (err) {
       setError(err.response?.data?.message || 'Google sign-in failed. Please try again.');
     } finally {

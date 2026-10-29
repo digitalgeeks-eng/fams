@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { getBookingHistory, getBookingHistoryError } from '../utils/bookingHistory.js';
 
 const StudentDashboard = () => {
   const { user } = useAuth();
   const [data, setData] = useState({ bookings: [], payments: [], complaints: [], recommendations: [] });
   const [loading, setLoading] = useState(true);
+  const [bookingError, setBookingError] = useState('');
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -20,8 +22,17 @@ const StudentDashboard = () => {
           api.get('/users/recommendations')
         ]);
         
+        let bookingPayload = [];
+        let bookingLoadError = '';
+        try {
+          if (results[0].status === 'rejected') throw results[0].reason;
+          bookingPayload = getBookingHistory(results[0].value);
+        } catch (error) {
+          bookingLoadError = getBookingHistoryError(error);
+        }
+        setBookingError(bookingLoadError);
         setData({
-          bookings: results[0].status === 'fulfilled' ? results[0].value.data.data : [],
+          bookings: bookingPayload,
           payments: results[1].status === 'fulfilled' ? results[1].value.data.data : [],
           complaints: results[2].status === 'fulfilled' ? results[2].value.data.data : [],
           recommendations: results[3].status === 'fulfilled' ? results[3].value.data.data : []
@@ -84,7 +95,11 @@ const StudentDashboard = () => {
             <span className="inline-flex rounded-full bg-secondary/10 px-2.5 sm:px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] sm:tracking-[0.3em] text-secondary whitespace-nowrap">{data.bookings.length} total</span>
           </div>
           <ul className="mt-4 sm:mt-6 space-y-2 sm:space-y-4">
-            {data.bookings.length ? data.bookings.map((booking) => (
+            {bookingError ? (
+              <li role="alert" className="text-xs text-rose-700 sm:text-sm">
+                {bookingError} <Link to="/student/bookings" className="font-semibold underline">Open My Bookings to retry.</Link>
+              </li>
+            ) : data.bookings.length ? data.bookings.map((booking) => (
               <li key={booking._id} className="rounded-lg sm:rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
                 <p className="text-sm sm:text-base font-semibold text-slate-900 truncate">{booking.propertyId?.title || 'Booked property'}</p>
                 {booking.roomId?.roomNumber && <p className="mt-0.5 text-xs sm:text-sm text-slate-600">Room: {booking.roomId.roomNumber}</p>}

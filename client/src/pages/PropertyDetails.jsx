@@ -311,6 +311,9 @@ const PropertyDetails = () => {
                               <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
                                 Booking {booking.bookingStatus}{booking.paymentStatus === 'paid' ? ' · Paid' : ''}
                               </p>
+                              <Link to="/student/bookings" className="text-center text-sm font-semibold text-primary underline">
+                                View My Bookings
+                              </Link>
                               {request ? (
                                 <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
                                   Inspection request: <span className="font-semibold capitalize">{request.status}</span>
@@ -395,6 +398,9 @@ const PropertyDetails = () => {
         {findBooking() ? (
           <div className="mt-6 space-y-3 rounded-2xl bg-emerald-50 p-4 text-emerald-900">
             <p className="font-semibold">Booking submitted successfully · {findBooking().bookingStatus}</p>
+            <Link to="/student/bookings" className="block text-center text-sm font-semibold underline">
+              View My Bookings
+            </Link>
             {findBooking().inspectionRequests?.some((request) => ['pending', 'accepted'].includes(request.status)) ? (
               <p className="text-sm">Inspection request status: <span className="font-semibold capitalize">{findBooking().inspectionRequests.find((request) => ['pending', 'accepted'].includes(request.status)).status}</span></p>
             ) : (

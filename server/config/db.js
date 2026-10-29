@@ -6,7 +6,7 @@ dotenv.config();
 const MONGO_URI = process.env.MONGO_URI;
 mongoose.set('strictQuery', false);
 
-const connectDatabase = async () => {
+const connectDatabase = async (options = {}) => {
   if (!MONGO_URI) {
     throw new Error('MONGO_URI is not set. Add your MongoDB Atlas connection string in the server environment variables.');
   }
@@ -14,6 +14,7 @@ const connectDatabase = async () => {
   try {
     const conn = await mongoose.connect(MONGO_URI, {
       serverSelectionTimeoutMS: 10000,
+      ...options,
     });
     console.log(`MongoDB connected: ${conn.connection.host}/${conn.connection.name}`);
     return conn;

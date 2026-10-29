@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { GoogleLogin } from '@react-oauth/google';
+import { getAuthenticatedHomePath } from '../utils/authSession.js';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -12,11 +13,7 @@ const Login = () => {
   const location = useLocation();
   const bookingDestination = location.state?.from;
   const navigateAfterLogin = (role) => {
-    if (role === 'student' && typeof bookingDestination === 'string' && bookingDestination.startsWith('/properties/')) {
-      navigate(bookingDestination, { replace: true });
-    } else {
-      navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/agent' : '/student', { replace: true });
-    }
+    navigate(getAuthenticatedHomePath(role, bookingDestination), { replace: true });
   };
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import api, { setAuthToken } from '../services/api.js';
+import { persistAuthSession } from '../utils/authSession.js';
 
 export const AuthContext = createContext();
 
@@ -32,10 +33,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       const response = await api.post('/auth/login', credentials);
-      const token = response.data.data.token;
-      localStorage.setItem('amsToken', token);
-      setAuthToken(token);
-      setUser(response.data.data.user);
+      persistAuthSession(response.data.data, { storage: localStorage, setAuthToken, setUser });
       setError(null);
       return response.data;
     } catch (err) {
@@ -60,10 +58,7 @@ export const AuthProvider = ({ children }) => {
   const completeRegistration = async (credentials) => {
     try {
       const response = await api.post('/auth/verify-registration', credentials);
-      const token = response.data.data.token;
-      localStorage.setItem('amsToken', token);
-      setAuthToken(token);
-      setUser(response.data.data.user);
+      persistAuthSession(response.data.data, { storage: localStorage, setAuthToken, setUser });
       setError(null);
       return response.data;
     } catch (err) {
@@ -76,10 +71,7 @@ export const AuthProvider = ({ children }) => {
   const loginWithGoogle = async (credential) => {
     try {
       const response = await api.post('/auth/google', { credential });
-      const token = response.data.data.token;
-      localStorage.setItem('amsToken', token);
-      setAuthToken(token);
-      setUser(response.data.data.user);
+      persistAuthSession(response.data.data, { storage: localStorage, setAuthToken, setUser });
       setError(null);
       return response.data;
     } catch (err) {
