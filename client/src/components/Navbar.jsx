@@ -38,6 +38,7 @@ const Navbar = () => {
           <MenuLink to="/listings" label="Listings" />
           <MenuLink to="/about-us" label="About Us" />
           <MenuLink to="/contact-us" label="Contact Us" />
+          <MenuLink to="/support" label="Help & Support" />
           
           {!user && (
             <>
@@ -113,6 +114,7 @@ const Navbar = () => {
           <MenuLink to="/listings" label="Listings" />
           <MenuLink to="/about-us" label="About Us" />
           <MenuLink to="/contact-us" label="Contact Us" />
+          <MenuLink to="/support" label="Help & Support" />
           
           {!user && (
             <>

@@ -160,8 +160,11 @@ test('links a verified Google identity to an existing email account instead of d
 
 test('rejects invalid or expired Google credentials without looking up or creating users', async () => {
   let databaseCalls = 0;
+  const originalWarn = console.warn;
+  const warningCalls = [];
+  console.warn = (...args) => warningCalls.push(args);
   OAuth2Client.prototype.verifyIdToken = async () => {
-    throw new Error('Invalid or expired Google credential');
+    throw new Error('Wrong recipient, payload audience != requiredAudience; token=secret-token; email=private@example.test');
   };
   User.findOne = () => {
     databaseCalls += 1;
@@ -172,10 +175,30 @@ test('rejects invalid or expired Google credentials without looking up or creati
     throw new Error('Should not create users for invalid credentials');
   };
 
-  const response = await invoke('invalid-or-expired-credential');
+  let response;
+  let expiredResponse;
+  try {
+    response = await invoke('invalid-or-expired-credential');
+    OAuth2Client.prototype.verifyIdToken = async () => {
+      throw new Error('Token used too late, email=private@example.test; token=secret-token');
+    };
+    expiredResponse = await invoke('expired-credential');
+  } finally {
+    console.warn = originalWarn;
+  }
 
   assert.equal(response.statusCode, 401);
   assert.equal(response.body.message, 'Google authentication failed. Please try again.');
+  assert.equal(expiredResponse.statusCode, 401);
+  assert.deepEqual(warningCalls, [[
+    'Google ID token verification failed',
+    { category: 'audience_mismatch', googleClientIdConfigured: true }
+  ], [
+    'Google ID token verification failed',
+    { category: 'expired_or_invalid_expiration', googleClientIdConfigured: true }
+  ]]);
+  assert.equal(JSON.stringify(warningCalls).includes('secret-token'), false);
+  assert.equal(JSON.stringify(warningCalls).includes('private@example.test'), false);
   assert.equal(databaseCalls, 0);
 });
 
@@ -209,4 +232,16 @@ test('rejects suspended Google-linked accounts without changing or creating user
   assert.equal(response.statusCode, 403);
   assert.match(response.body.message, /suspended/i);
   assert.equal(createCalls, 0);
+});
+
+test('does not convert account database failures into Google credential errors', async () => {
+  OAuth2Client.prototype.verifyIdToken = async () => ({ getPayload: () => validPayload });
+  User.findOne = () => {
+    throw new Error('database unavailable');
+  };
+
+  await assert.rejects(
+    invoke(),
+    (error) => error.message === 'database unavailable'
+  );
 });

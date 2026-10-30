@@ -14,6 +14,15 @@ dotenv.config();
 
 const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const getGoogleVerificationErrorCategory = (error) => {
+  const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+  if (message.includes('audience') || message.includes('recipient')) return 'audience_mismatch';
+  if (message.includes('issuer')) return 'issuer_mismatch';
+  if (message.includes('expired') || message.includes('expiration') || message.includes('exp field') || message.includes('token used too late')) return 'expired_or_invalid_expiration';
+  if (message.includes('signature') || message.includes('certificate') || message.includes('public key')) return 'signature_verification_failed';
+  if (message.includes('fetch') || message.includes('network') || message.includes('timeout') || message.includes('econn')) return 'google_keys_unavailable';
+  return 'token_verification_failed';
+};
 const REGISTRATION_CODE_TTL_MS = 10 * 60 * 1000;
 const PENDING_REGISTRATION_TTL_MS = 24 * 60 * 60 * 1000;
 const REGISTRATION_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -658,6 +667,10 @@ export const googleLogin = async (req, res) => {
     });
     payload = ticket.getPayload();
   } catch (error) {
+    console.warn('Google ID token verification failed', {
+      category: getGoogleVerificationErrorCategory(error),
+      googleClientIdConfigured: Boolean(process.env.GOOGLE_CLIENT_ID)
+    });
     return res.status(401).json({ message: 'Google authentication failed. Please try again.' });
   }
 

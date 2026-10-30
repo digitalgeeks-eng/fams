@@ -33,6 +33,7 @@ import SendNotification from './pages/SendNotification.jsx';
 import AdminManagement from './pages/AdminManagement.jsx';
 import Navbar from './components/Navbar.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
+import TechnicalSupport from './components/TechnicalSupport.jsx';
 
 const PrivateRoute = ({ children, role }) => {
   const { user, loading } = useAuth();
@@ -77,6 +78,7 @@ const App = () => (
           <Route path="/listings" element={<Listings />} />
           <Route path="/about-us" element={<AboutUs />} />
           <Route path="/contact-us" element={<ContactUs />} />
+          <Route path="/support" element={<TechnicalSupport />} />
           <Route path="/properties/:id" element={<PropertyDetails />} />
           <Route path="/student" element={<PrivateRoute role="student"><StudentDashboard /></PrivateRoute>} />
           <Route path="/student/bookings" element={<PrivateRoute role="student"><MyBookings /></PrivateRoute>} />

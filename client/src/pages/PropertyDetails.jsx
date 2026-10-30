@@ -5,6 +5,7 @@ import api from '../services/api.js';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import { formatInspectionFee } from '../utils/inspectionFee.js';
 import PropertyMediaGallery from '../components/PropertyMediaGallery.jsx';
+import TechnicalSupport from '../components/TechnicalSupport.jsx';
 
 const PropertyDetails = () => {
   const { id } = useParams();
@@ -494,6 +495,9 @@ const PropertyDetails = () => {
         )}
       </div>
 
+      <div className="lg:col-span-2">
+        <TechnicalSupport />
+      </div>
     </section>
   );
 };
