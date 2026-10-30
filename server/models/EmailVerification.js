@@ -11,7 +11,7 @@ const emailVerificationSchema = new mongoose.Schema({
   registrationStatus: { type: String, enum: ['pending', 'completed'] },
   registrationData: { type: mongoose.Schema.Types.Mixed, select: false },
   completedUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  expiresAt: { type: Date, required: true, index: true },
+  expiresAt: { type: Date, required: true },
   verifiedAt: { type: Date }
 }, { timestamps: true });
 
