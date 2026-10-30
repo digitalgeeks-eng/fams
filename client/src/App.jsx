@@ -34,6 +34,7 @@ import AdminManagement from './pages/AdminManagement.jsx';
 import Navbar from './components/Navbar.jsx';
 import LoadingSpinner from './components/LoadingSpinner.jsx';
 import TechnicalSupport from './components/TechnicalSupport.jsx';
+import AnnouncementPopup from './components/AnnouncementPopup.jsx';
 
 const PrivateRoute = ({ children, role }) => {
   const { user, loading } = useAuth();
@@ -69,7 +70,7 @@ const App = () => (
       <Navbar />
       <main className="max-w-7xl mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-8">
         <Routes>
-          <Route path="/" element={<Listings />} />
+          <Route path="/" element={<><Listings /><AnnouncementPopup /></>} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
